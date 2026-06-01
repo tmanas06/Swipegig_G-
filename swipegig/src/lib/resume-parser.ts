@@ -1,9 +1,15 @@
+import path from 'path';
+
 if (typeof global !== 'undefined' && !(global as any).DOMMatrix) {
   (global as any).DOMMatrix = class DOMMatrix {};
 }
-const pdf = require('pdf-parse');
+import { PDFParse } from 'pdf-parse';
 import mammoth from 'mammoth';
 import Groq from 'groq-sdk';
+
+// Configure the worker path dynamically at runtime for the Next.js server environment
+const workerPath = path.join(process.cwd(), 'node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs');
+PDFParse.setWorker(workerPath);
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
@@ -33,7 +39,8 @@ export async function parseResume(buffer: Buffer, fileType: string): Promise<Par
 
   try {
     if (fileType === 'application/pdf' || fileType.toLowerCase().includes('pdf')) {
-      const parsedData = await pdf(buffer);
+      const parser = new PDFParse({ data: buffer });
+      const parsedData = await parser.getText();
       text = parsedData.text;
     } else if (
       fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||

@@ -1,0 +1,266 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ──────────────────────────────────────────────
+
+enum UserRole {
+  SEEKER
+  RECRUITER
+  ADMIN
+}
+
+enum ApplicationStatus {
+  APPLIED
+  INTERVIEWING
+  OFFERED
+  REJECTED
+  WITHDRAWN
+}
+
+enum RewardTrigger {
+  PROFILE_COMPLETION
+  FIRST_APPLICATION
+  APPLICATION
+  INTERVIEW_LANDED
+  REFERRAL
+  COMPANY_REVIEW
+  DAILY_LOGIN
+  ACHIEVEMENT
+}
+
+enum JobType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  FREELANCE
+  INTERNSHIP
+}
+
+enum JobMode {
+  REMOTE
+  HYBRID
+  ONSITE
+}
+
+enum JobSource {
+  REMOTIVE
+  WELLFOUND
+  GREENHOUSE
+  WEB3_CAREER
+  RECRUITER_POST
+  MANUAL
+}
+
+enum ProfileVisibility {
+  PUBLIC
+  RECRUITERS_ONLY
+  PRIVATE
+}
+
+// ─── User ───────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  privyId       String    @unique
+  walletAddress String?   @unique
+  ensName       String?
+  email         String?   @unique
+  name          String?
+  avatarUrl     String?
+  profileScore  Int       @default(0)
+  isVerified    Boolean   @default(false)
+  role          UserRole  @default(SEEKER)
+  loginStreak   Int       @default(0)
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  profile       Profile?
+  resume        Resume?
+  savedJobs     SavedJob[]
+  applications  Application[]
+  rewards       Reward[]
+  reviews       Review[]
+  recruiter     Recruiter?
+
+  @@index([walletAddress])
+  @@index([privyId])
+}
+
+// ─── Profile ────────────────────────────────────────────
+
+model Profile {
+  id            String            @id @default(cuid())
+  userId        String            @unique
+  bio           String?           @db.Text
+  headline      String?
+  skills        String[]
+  githubUrl     String?
+  linkedinUrl   String?
+  portfolioUrl  String?
+  location      String?
+  ipfsHash      String?
+  visibility    ProfileVisibility @default(PUBLIC)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ─── Resume ─────────────────────────────────────────────
+
+model Resume {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  fileUrl          String
+  fileName         String
+  fileType         String
+  parsedText       String?  @db.Text
+  parsedSkills     String[]
+  parsedExperience Json?
+  parsedEducation  Json?
+  parsedSummary    String?  @db.Text
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ─── Job ────────────────────────────────────────────────
+
+model Job {
+  id             String    @id @default(cuid())
+  externalId     String?   @unique
+  title          String
+  company        String
+  companyLogo    String?
+  description    String    @db.Text
+  skills         String[]
+  salaryMin      Int?
+  salaryMax      Int?
+  salaryCurrency String?   @default("USD")
+  location       String?
+  type           JobType   @default(FULL_TIME)
+  mode           JobMode   @default(REMOTE)
+  source         JobSource @default(MANUAL)
+  sourceUrl      String?
+  isWeb3         Boolean   @default(false)
+  experienceLevel String?
+  expiresAt      DateTime?
+  postedAt       DateTime  @default(now())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  savedBy        SavedJob[]
+  applications   Application[]
+
+  @@index([source])
+  @@index([isWeb3])
+  @@index([type, mode])
+  @@index([createdAt])
+}
+
+// ─── SavedJob ───────────────────────────────────────────
+
+model SavedJob {
+  id        String   @id @default(cuid())
+  userId    String
+  jobId     String
+  savedAt   DateTime @default(now())
+  remindAt  DateTime?
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, jobId])
+  @@index([userId])
+}
+
+// ─── Application ────────────────────────────────────────
+
+model Application {
+  id             String            @id @default(cuid())
+  userId         String
+  jobId          String
+  status         ApplicationStatus @default(APPLIED)
+  coverLetter    String?           @db.Text
+  resumeVersion  String?
+  txHash         String?
+  notes          String?           @db.Text
+  appliedAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job            Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, jobId])
+  @@index([userId])
+  @@index([status])
+}
+
+// ─── Reward ─────────────────────────────────────────────
+
+model Reward {
+  id        String        @id @default(cuid())
+  userId    String
+  amount    Float
+  trigger   RewardTrigger
+  txHash    String?
+  metadata  Json?
+  createdAt DateTime      @default(now())
+
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([trigger])
+}
+
+// ─── Review ─────────────────────────────────────────────
+
+model Review {
+  id          String   @id @default(cuid())
+  userId      String
+  companyName String
+  rating      Int
+  title       String?
+  content     String   @db.Text
+  verified    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([companyName])
+}
+
+// ─── Recruiter ──────────────────────────────────────────
+
+model Recruiter {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  companyName   String
+  companyLogo   String?
+  companyUrl    String?
+  description   String?  @db.Text
+  verified      Boolean  @default(false)
+  stakeAmount   Float    @default(0)
+  reputationScore Float  @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([verified])
+}

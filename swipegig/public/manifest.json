@@ -1,0 +1,16 @@
+{
+  "name": "SwipeGig",
+  "short_name": "SwipeGig",
+  "description": "AI-Powered Web3 Job Platform",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0b0f",
+  "theme_color": "#00C853",
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

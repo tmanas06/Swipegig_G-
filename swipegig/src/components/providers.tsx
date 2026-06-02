@@ -108,7 +108,7 @@ export default function Providers({ children }: { children: ReactNode }) {
           <AuthSync />
           {children}
           <Toaster
-            position="bottom-right"
+            position="top-center"
             toastOptions={{
               duration: 2500,
               style: {

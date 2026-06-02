@@ -78,6 +78,7 @@ model User {
   role          UserRole  @default(SEEKER)
   loginStreak   Int       @default(0)
   lastLoginAt   DateTime?
+  onboardedOnChain Boolean  @default(false)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

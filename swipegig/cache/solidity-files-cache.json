@@ -152,8 +152,8 @@
       ]
     },
     "/Users/manas/Desktop/Swipegig_G-/swipegig/contracts/SwipeGigWelcomeNFT.sol": {
-      "lastModificationDate": 1780404100518,
-      "contentHash": "e74ccac4275b622cdac98f004b464678",
+      "lastModificationDate": 1780407570944,
+      "contentHash": "db1ae504e581ef97c1fa7f1ea3f0cea3",
       "sourceName": "contracts/SwipeGigWelcomeNFT.sol",
       "solcConfig": {
         "version": "0.8.20",

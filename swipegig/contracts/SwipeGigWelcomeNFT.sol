@@ -78,4 +78,13 @@ contract SwipeGigWelcomeNFT {
 
         return tokenId;
     }
+
+    /**
+     * @dev ERC-165 support for standard ERC-721 detection on block explorers.
+     */
+    function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
+        return interfaceId == 0x80ac58cd || // ERC-721
+               interfaceId == 0x5b5e139f || // ERC-721Metadata
+               interfaceId == 0x01ffc9a7;   // ERC-165
+    }
 }

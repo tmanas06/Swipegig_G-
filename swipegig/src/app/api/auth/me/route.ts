@@ -12,16 +12,15 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { email, walletAddress, name } = body;
 
-    // Check if the user already exists and if they have a wallet address recorded
+    // Check if the user already exists and their onboarding status
     const existingUser = await prisma.user.findUnique({
       where: { privyId },
-      select: { id: true, walletAddress: true },
+      select: { id: true, walletAddress: true, onboardedOnChain: true },
     });
 
     // Trigger onboarding if:
-    // 1. User is brand new and a wallet address is provided, OR
-    // 2. User exists but had no wallet address in the DB, and one is now being provided.
-    const shouldOnboard = !!walletAddress && (!existingUser || !existingUser.walletAddress);
+    // User has a wallet address, and either they don't exist yet or they exist but have not been onboarded on-chain
+    const shouldOnboard = !!walletAddress && (!existingUser || !existingUser.onboardedOnChain);
 
     // Upsert user and include profile + resume relations
     const user = await prisma.user.upsert({
@@ -31,6 +30,7 @@ export async function POST(request: NextRequest) {
         walletAddress: walletAddress || undefined,
         name: name || undefined,
         lastLoginAt: new Date(),
+        onboardedOnChain: shouldOnboard ? true : undefined, // Mark as onboarded if we trigger it
       },
       create: {
         privyId,
@@ -38,6 +38,7 @@ export async function POST(request: NextRequest) {
         walletAddress,
         name,
         lastLoginAt: new Date(),
+        onboardedOnChain: shouldOnboard, // Set to true if we trigger onboarding
         profile: {
           create: {
             skills: [],

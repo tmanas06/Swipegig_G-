@@ -2,10 +2,6 @@ import { createWalletClient, http, parseEther, createPublicClient } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { celoSepolia } from 'viem/chains';
 
-const PRIVATE_KEY = process.env.PRIVATE_KEY;
-const WELCOME_NFT_ADDRESS = process.env.WELCOME_NFT_CONTRACT_ADDRESS;
-const RPC_URL = process.env.NEXT_PUBLIC_CELO_RPC_URL || 'https://forno.celo-sepolia.celo-testnet.org';
-
 // ABI for mintWelcomeNFT
 const WELCOME_NFT_ABI = [
   {
@@ -21,6 +17,11 @@ const WELCOME_NFT_ABI = [
 ] as const;
 
 export async function onboardNewUser(userAddress: string) {
+  // Read env variables dynamically at runtime when the function is called
+  const PRIVATE_KEY = process.env.PRIVATE_KEY;
+  const WELCOME_NFT_ADDRESS = process.env.WELCOME_NFT_CONTRACT_ADDRESS;
+  const RPC_URL = process.env.NEXT_PUBLIC_CELO_RPC_URL || 'https://forno.celo-sepolia.celo-testnet.org';
+
   if (!PRIVATE_KEY) {
     console.error('[ONBOARDING] No PRIVATE_KEY configured in environment');
     return { success: false, error: 'No private key configured' };
@@ -34,7 +35,11 @@ export async function onboardNewUser(userAddress: string) {
   try {
     console.log(`[ONBOARDING] Starting onboarding automation for user: ${userAddress}`);
 
-    const account = privateKeyToAccount(PRIVATE_KEY as `0x${string}`);
+    let formattedKey = PRIVATE_KEY;
+    if (!formattedKey.startsWith('0x')) {
+      formattedKey = `0x${formattedKey}`;
+    }
+    const account = privateKeyToAccount(formattedKey as `0x${string}`);
     const walletClient = createWalletClient({
       account,
       chain: celoSepolia,

@@ -27,6 +27,7 @@ const navItems = [
   { href: '/applications', label: 'Applications', icon: Briefcase, color: 'text-orange-400' },
   { href: '/coach', label: 'AI Coach', icon: MessageSquare, color: 'text-purple-400' },
   { href: '/rewards', label: 'Rewards', icon: Gift, color: 'text-yellow-400' },
+  { href: '/wallet', label: 'Wallet', icon: Wallet, color: 'text-emerald-400' },
   { href: '/recruiter', label: 'Recruiter', icon: LayoutGrid, color: 'text-cyan-400' },
   { href: '/settings', label: 'Settings', icon: Settings, color: 'text-gray-400' },
 ];

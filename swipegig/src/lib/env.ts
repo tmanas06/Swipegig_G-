@@ -17,7 +17,7 @@ const envSchema = z.object({
   REDIS_URL: z.string().optional(),
 
   // Blockchain
-  NEXT_PUBLIC_CELO_RPC_URL: z.string().url().default('https://alfajores-forno.celo-testnet.org'),
+  NEXT_PUBLIC_CELO_RPC_URL: z.string().url().default('https://forno.celo-sepolia.celo-testnet.org'),
   REWARDS_CONTRACT_ADDRESS: z.string().optional(),
   APPLICATIONS_CONTRACT_ADDRESS: z.string().optional(),
   POOL_CONTRACT_ADDRESS: z.string().optional(),

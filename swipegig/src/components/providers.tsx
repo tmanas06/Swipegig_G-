@@ -57,9 +57,9 @@ export default function Providers({ children }: { children: ReactNode }) {
             },
           },
           defaultChain: {
-            id: 44787,
-            name: 'Celo Alfajores Testnet',
-            network: 'celo-alfajores',
+            id: 11142220,
+            name: 'Celo Sepolia Testnet',
+            network: 'celo-sepolia',
             nativeCurrency: {
               name: 'CELO',
               symbol: 'CELO',
@@ -67,22 +67,22 @@ export default function Providers({ children }: { children: ReactNode }) {
             },
             rpcUrls: {
               default: {
-                http: ['https://alfajores-forno.celo-testnet.org'],
+                http: ['https://forno.celo-sepolia.celo-testnet.org'],
               },
             },
             blockExplorers: {
               default: {
-                name: 'Celoscan',
-                url: 'https://alfajores.celoscan.io',
+                name: 'Blockscout',
+                url: 'https://celo-sepolia.blockscout.com',
               },
             },
             testnet: true,
           },
           supportedChains: [
             {
-              id: 44787,
-              name: 'Celo Alfajores Testnet',
-              network: 'celo-alfajores',
+              id: 11142220,
+              name: 'Celo Sepolia Testnet',
+              network: 'celo-sepolia',
               nativeCurrency: {
                 name: 'CELO',
                 symbol: 'CELO',
@@ -90,13 +90,13 @@ export default function Providers({ children }: { children: ReactNode }) {
               },
               rpcUrls: {
                 default: {
-                  http: ['https://alfajores-forno.celo-testnet.org'],
+                  http: ['https://forno.celo-sepolia.celo-testnet.org'],
                 },
               },
               blockExplorers: {
                 default: {
-                  name: 'Celoscan',
-                  url: 'https://alfajores.celoscan.io',
+                  name: 'Blockscout',
+                  url: 'https://celo-sepolia.blockscout.com',
                 },
               },
               testnet: true,

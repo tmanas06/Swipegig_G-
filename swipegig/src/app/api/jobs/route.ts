@@ -5,7 +5,7 @@ import { syncJobsFromAPIs } from '@/lib/job-sync';
 
 const filterSchema = z.object({
   page: z.coerce.number().min(1).default(1),
-  limit: z.coerce.number().min(1).max(50).default(20),
+  limit: z.coerce.number().min(1).max(200).default(100),
   search: z.string().optional(),
   type: z.string().optional(),
   mode: z.string().optional(),
@@ -96,16 +96,24 @@ const SEED_JOBS = [
 
 export async function GET(request: NextRequest) {
   try {
-    // Auto-seed/sync if no jobs exist, or if we have never synced live Remotive jobs
-    const count = await prisma.job.count();
-    const remotiveSyncCount = await prisma.job.count({
-      where: { externalId: { startsWith: 'remotive-' } }
+    const totalCount = await prisma.job.count();
+    
+    // Check the latest synced Remotive job to determine last sync time
+    const lastJob = await prisma.job.findFirst({
+      where: { source: 'REMOTIVE' },
+      orderBy: { createdAt: 'desc' },
     });
 
-    if (count === 0 || remotiveSyncCount === 0) {
-      console.log('[JOBS_API] Database is empty or has never synced live Remotive jobs. Running sync...');
+    const TEN_MINUTES = 10 * 60 * 1000;
+    const isStale = !lastJob || (Date.now() - lastJob.createdAt.getTime() > TEN_MINUTES);
+    // Sync if stale OR if database has fewer than 50 jobs
+    const shouldSync = isStale || totalCount < 50;
+
+    if (shouldSync) {
+      console.log(`[JOBS_API] Running sync. Total jobs in DB: ${totalCount}. Stale: ${isStale}.`);
       const syncResult = await syncJobsFromAPIs();
       
+      const count = await prisma.job.count();
       // Fallback to high-quality Web3 seed jobs if database is completely empty and sync failed
       if (count === 0 && (!syncResult.success || syncResult.newJobs === 0)) {
         console.log('[JOBS_API] Live sync failed and database is empty. Falling back to default Web3 seed jobs...');

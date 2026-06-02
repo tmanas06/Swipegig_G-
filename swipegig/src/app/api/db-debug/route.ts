@@ -1,8 +1,18 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { syncJobsFromAPIs } from '@/lib/job-sync';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url);
+    const sync = searchParams.get('sync') === 'true';
+
+    let syncResult = null;
+    if (sync) {
+      console.log('[DB_DEBUG] Force syncing jobs...');
+      syncResult = await syncJobsFromAPIs();
+    }
+
     const totalJobs = await prisma.job.count();
     const remotiveJobs = await prisma.job.count({
       where: { externalId: { startsWith: 'remotive-' } }
@@ -26,6 +36,7 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
+      syncResult,
       totalJobs,
       remotiveJobs,
       web3Jobs,

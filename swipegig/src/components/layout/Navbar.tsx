@@ -18,8 +18,10 @@ import {
   LogOut,
   Wallet,
   ChevronRight,
+  ShieldCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useUserStore } from '@/stores/useUserStore';
 
 const navItems = [
   { href: '/feed', label: 'Swipe', icon: Zap, color: 'text-green-400' },
@@ -35,7 +37,15 @@ const navItems = [
 export default function Navbar() {
   const pathname = usePathname();
   const { authenticated, user, logout, login } = usePrivy();
+  const { user: storeUser } = useUserStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const isAdmin = storeUser?.role === 'ADMIN';
+
+  // Build nav items dynamically — include Admin only for admin users
+  const allNavItems = [
+    ...navItems,
+    ...(isAdmin ? [{ href: '/admin', label: 'Admin', icon: ShieldCheck, color: 'text-red-400' }] : []),
+  ];
 
   // Don't show navbar on landing page
   if (pathname === '/') return null;
@@ -63,7 +73,7 @@ export default function Navbar() {
 
         {/* Nav Items */}
         <div className="flex-1 flex flex-col gap-1 px-3 py-4">
-          {navItems.map((item) => {
+          {allNavItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
             return (
               <Link
@@ -121,7 +131,7 @@ export default function Navbar() {
       {/* Mobile Bottom Nav */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 glass border-t border-border z-50 safe-area-bottom">
         <div className="flex items-center justify-around px-2 py-2">
-          {navItems.slice(0, 5).map((item) => {
+          {allNavItems.slice(0, 5).map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
             return (
               <Link
@@ -187,7 +197,7 @@ export default function Navbar() {
               </div>
 
               <div className="space-y-2">
-                {navItems.map((item) => {
+                {allNavItems.map((item) => {
                   const isActive = pathname === item.href;
                   return (
                     <Link

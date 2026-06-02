@@ -19,9 +19,16 @@ export default function AuthSync() {
         setLoading(true);
         try {
           const response = await fetch('/api/auth/me', {
+            method: 'POST',
             headers: {
+              'Content-Type': 'application/json',
               'x-privy-user-id': user.id,
             },
+            body: JSON.stringify({
+              email: user.email?.address || user.google?.email || user.github?.email || null,
+              walletAddress: user.wallet?.address || null,
+              name: user.google?.name || user.github?.name || user.name || null,
+            }),
           });
           if (response.ok) {
             const data = await response.json();

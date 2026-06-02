@@ -1,0 +1,155 @@
+{
+  "_format": "hh-sol-cache-2",
+  "files": {
+    "/Users/manas/Desktop/Swipegig_G-/swipegig/contracts/MockGoodDollar.sol": {
+      "lastModificationDate": 1780396380071,
+      "contentHash": "c48f3d786295f8df2e815346bfa7133a",
+      "sourceName": "contracts/MockGoodDollar.sol",
+      "solcConfig": {
+        "version": "0.8.20",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "MockGoodDollar"
+      ]
+    },
+    "/Users/manas/Desktop/Swipegig_G-/swipegig/contracts/SwipeGigApplications.sol": {
+      "lastModificationDate": 1780338959798,
+      "contentHash": "9c2884a9d1de3d1b97fbd35d7bb4f798",
+      "sourceName": "contracts/SwipeGigApplications.sol",
+      "solcConfig": {
+        "version": "0.8.20",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "Ownable",
+        "SwipeGigApplications"
+      ]
+    },
+    "/Users/manas/Desktop/Swipegig_G-/swipegig/contracts/SwipeGigPool.sol": {
+      "lastModificationDate": 1780338965414,
+      "contentHash": "055a202ddd50603de0ca1fc2f18501b3",
+      "sourceName": "contracts/SwipeGigPool.sol",
+      "solcConfig": {
+        "version": "0.8.20",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "IERC20",
+        "Ownable",
+        "ReentrancyGuard",
+        "SwipeGigPool"
+      ]
+    },
+    "/Users/manas/Desktop/Swipegig_G-/swipegig/contracts/SwipeGigRewards.sol": {
+      "lastModificationDate": 1780338954997,
+      "contentHash": "838f400fed00d42b8206fc547c99e710",
+      "sourceName": "contracts/SwipeGigRewards.sol",
+      "solcConfig": {
+        "version": "0.8.20",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "Ownable",
+        "ReentrancyGuard",
+        "SwipeGigRewards"
+      ]
+    }
+  }
+}

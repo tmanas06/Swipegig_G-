@@ -7,7 +7,7 @@ import { usePathname, useRouter } from 'next/navigation';
 
 export default function AuthSync() {
   const { authenticated, user, ready } = usePrivy();
-  const { setUser, setLoading, setOnboarded } = useUserStore();
+  const { setUser, setLoading, setOnboarded, clearUser } = useUserStore();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -29,9 +29,13 @@ export default function AuthSync() {
 
             // Determine if user has completed basic onboarding (has name and headline)
             const isProfileComplete = !!data.user?.name && !!data.user?.profile?.headline;
-            setOnboarded(isProfileComplete);
+            const { isOnboarded } = useUserStore.getState();
 
-            if (!isProfileComplete && pathname !== '/onboarding' && !pathname.startsWith('/api')) {
+            if (isProfileComplete && !isOnboarded) {
+              setOnboarded(true);
+            }
+
+            if (!isProfileComplete && !isOnboarded && pathname !== '/onboarding' && !pathname.startsWith('/api')) {
               router.push('/onboarding');
             }
           }
@@ -41,8 +45,7 @@ export default function AuthSync() {
           setLoading(false);
         }
       } else {
-        setUser(null);
-        setLoading(false);
+        clearUser();
         // Redirect unauthenticated users to landing page if they try to access protected views
         if (pathname !== '/' && pathname !== '/onboarding' && !pathname.startsWith('/api')) {
           router.push('/');
@@ -51,7 +54,7 @@ export default function AuthSync() {
     };
 
     syncUser();
-  }, [authenticated, user?.id, ready, pathname, router, setUser, setLoading, setOnboarded]);
+  }, [authenticated, user?.id, ready, pathname, router, setUser, setLoading, setOnboarded, clearUser]);
 
   return null;
 }

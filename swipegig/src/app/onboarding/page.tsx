@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
+import { useUserStore } from '@/stores/useUserStore';
 
 const SKILL_OPTIONS = [
   'Solidity', 'Rust', 'TypeScript', 'JavaScript', 'Python', 'Go',
@@ -42,6 +43,7 @@ const steps = [
 export default function OnboardingPage() {
   const router = useRouter();
   const { authenticated, login, user } = usePrivy();
+  const { setOnboarded } = useUserStore();
   const [currentStep, setCurrentStep] = useState(authenticated ? 1 : 0);
   const [profileData, setProfileData] = useState({
     name: '',
@@ -121,8 +123,8 @@ export default function OnboardingPage() {
     }
   };
 
-  const handleNext = async () => {
-    if (currentStep === 3) {
+  const handleNext = async (isSkipping = false) => {
+    if (currentStep === 3 && !isSkipping) {
       setIsUploading(true);
       try {
         await handleSaveProfile();
@@ -130,12 +132,14 @@ export default function OnboardingPage() {
       } catch (e) {
         // Allow user to proceed even if upload fails
         console.error(e);
+        setCurrentStep((s) => s + 1);
       } finally {
         setIsUploading(false);
       }
     } else if (currentStep < steps.length - 1) {
       setCurrentStep((s) => s + 1);
     } else {
+      setOnboarded(true);
       router.push('/feed');
     }
   };
@@ -457,7 +461,7 @@ export default function OnboardingPage() {
 
           {currentStep > 0 && currentStep < steps.length - 1 && (
             <button
-              onClick={handleNext}
+              onClick={() => handleNext(true)}
               disabled={isUploading}
               className="text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >

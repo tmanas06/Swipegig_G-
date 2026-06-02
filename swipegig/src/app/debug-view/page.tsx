@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { syncJobsFromAPIs } from '@/lib/job-sync';
 import Link from 'next/link';
+import ResetOnboardingButton from '@/components/ResetOnboardingButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -75,6 +76,7 @@ export default async function DebugViewPage({ searchParams }: Props) {
             <p className="text-slate-400 mt-1">Inspect jobs, trigger syncs, and clear database tables.</p>
           </div>
           <div className="flex gap-4">
+            <ResetOnboardingButton />
             <Link
               href="/debug-view?sync=true"
               className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-4 py-2 rounded-lg transition-colors"

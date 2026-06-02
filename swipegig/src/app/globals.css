@@ -58,12 +58,24 @@
   --success: #00C853;
   --warning: #f59e0b;
   color-scheme: dark;
+
+  /* Glassmorphism & Gradient Variables (Dark Mode) */
+  --glass-bg: rgba(18, 20, 26, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.06);
+  --glass-hover: rgba(255, 255, 255, 0.05);
+  --glass-light-bg: rgba(255, 255, 255, 0.05);
+  --glass-light-border: rgba(255, 255, 255, 0.08);
+  --gradient-card-start: rgba(18, 20, 26, 0.9);
+  --gradient-card-end: rgba(26, 29, 38, 0.6);
+  --border-color: rgba(255, 255, 255, 0.06);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.1);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.2);
 }
 
 /* ─── Light Theme ────────────────────────────────────── */
 
 [data-theme="light"] {
-  --background: #fafbfc;
+  --background: #f4f6f8;
   --foreground: #0f1419;
   --card: #ffffff;
   --card-foreground: #0f1419;
@@ -71,14 +83,26 @@
   --primary-foreground: #ffffff;
   --accent: #6d28d9;
   --accent-foreground: #ffffff;
-  --muted: #f1f3f5;
-  --muted-foreground: #6b7280;
-  --border: #e5e7eb;
+  --muted: #e9ecef;
+  --muted-foreground: #495057;
+  --border: #dee2e6;
   --ring: #00a844;
   --destructive: #dc2626;
   --success: #00a844;
   --warning: #d97706;
   color-scheme: light;
+
+  /* Glassmorphism & Gradient Variables (Light Mode) */
+  --glass-bg: rgba(255, 255, 255, 0.82);
+  --glass-border: rgba(15, 20, 25, 0.08);
+  --glass-hover: rgba(0, 0, 0, 0.03);
+  --glass-light-bg: rgba(15, 20, 25, 0.03);
+  --glass-light-border: rgba(15, 20, 25, 0.06);
+  --gradient-card-start: rgba(255, 255, 255, 0.95);
+  --gradient-card-end: rgba(240, 242, 245, 0.8);
+  --border-color: rgba(15, 20, 25, 0.08);
+  --scrollbar-thumb: rgba(0, 0, 0, 0.15);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.25);
 }
 
 
@@ -115,28 +139,28 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--scrollbar-thumb);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--scrollbar-thumb-hover);
 }
 
 /* ─── Glassmorphism Utilities ────────────────────────── */
 
 .glass {
-  background: rgba(18, 20, 26, 0.7);
+  background: var(--glass-bg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--glass-border);
 }
 
 .glass-light {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--glass-light-bg);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--glass-light-border);
 }
 
 .glass-accent {
@@ -168,7 +192,7 @@ body {
 }
 
 .gradient-card {
-  background: linear-gradient(145deg, rgba(18, 20, 26, 0.9) 0%, rgba(26, 29, 38, 0.6) 100%);
+  background: linear-gradient(145deg, var(--gradient-card-start) 0%, var(--gradient-card-end) 100%);
 }
 
 .gradient-border {
@@ -343,3 +367,57 @@ body {
   border: 1px solid rgba(124, 58, 237, 0.3);
   color: #A78BFA;
 }
+
+/* ─── Light Mode Tailwind Class Overrides ────────────────── */
+[data-theme="light"] {
+  /* Override bg-white opacities for light mode backgrounds */
+  .bg-white\/5 {
+    background-color: rgba(15, 20, 25, 0.05) !important;
+  }
+  .bg-white\/10 {
+    background-color: rgba(15, 20, 25, 0.09) !important;
+  }
+  .bg-white\/20 {
+    background-color: rgba(15, 20, 25, 0.15) !important;
+  }
+
+  /* Override hover:bg-white opacities in light mode */
+  .hover\:bg-white\/5:hover {
+    background-color: rgba(15, 20, 25, 0.05) !important;
+  }
+  .hover\:bg-white\/10:hover {
+    background-color: rgba(15, 20, 25, 0.09) !important;
+  }
+  .hover\:bg-white\/20:hover {
+    background-color: rgba(15, 20, 25, 0.15) !important;
+  }
+
+  /* Override border-white opacities in light mode */
+  .border-white\/5 {
+    border-color: rgba(15, 20, 25, 0.06) !important;
+  }
+  .border-white\/10 {
+    border-color: rgba(15, 20, 25, 0.1) !important;
+  }
+  .border-white\/20 {
+    border-color: rgba(15, 20, 25, 0.18) !important;
+  }
+
+  /* High-contrast colors for text/icons on light background */
+  .text-red-400 {
+    color: #dc2626 !important;
+  }
+  .text-green-400 {
+    color: #16a34a !important;
+  }
+  .text-yellow-400 {
+    color: #ca8a04 !important;
+  }
+  .text-purple-400 {
+    color: #7c3aed !important;
+  }
+  .text-muted-foreground {
+    color: #495057 !important;
+  }
+}
+

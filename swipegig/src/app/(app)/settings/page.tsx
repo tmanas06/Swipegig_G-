@@ -1,9 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
-  Settings as SettingsIcon,
   Bell,
   Moon,
   Sun,
@@ -13,19 +12,24 @@ import {
   Wallet,
   Shield,
   Eye,
-  Mail,
-  ChevronRight,
+  LogOut,
   ToggleLeft,
   ToggleRight,
-  LogOut,
-  ExternalLink,
+  ChevronRight,
 } from 'lucide-react';
-import { usePrivy } from '@privy-io/react-auth';
+import { usePrivy, useLinkAccount } from '@privy-io/react-auth';
 import { cn } from '@/lib/utils';
+import { useUserStore } from '@/stores/useUserStore';
+import { useAppStore } from '@/stores/useAppStore';
+import { toast } from 'react-hot-toast';
 
 export default function SettingsPage() {
-  const { logout, user } = usePrivy();
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const { logout, user: privyUser } = usePrivy();
+  const { user: storeUser, updateProfile } = useUserStore();
+  const { theme, toggleTheme } = useAppStore();
+
+  const [visibility, setVisibility] = useState<'PUBLIC' | 'RECRUITERS_ONLY' | 'PRIVATE'>('PUBLIC');
+  const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
   const [notifications, setNotifications] = useState({
     email: true,
     inApp: true,
@@ -33,10 +37,150 @@ export default function SettingsPage() {
     marketing: false,
   });
 
-  const toggleTheme = () => {
-    const next = theme === 'dark' ? 'light' : 'dark';
-    setTheme(next);
-    document.documentElement.setAttribute('data-theme', next);
+  const { linkEmail, linkWallet } = useLinkAccount({
+    onSuccess: (user) => {
+      toast.success('Account linked successfully!');
+    },
+    onError: (error) => {
+      console.error('[LINK_ACCOUNT_ERROR]', error);
+      toast.error('Failed to link account');
+    }
+  });
+
+  // Sync theme to document element on change
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
+
+  // Sync initial state from store / local storage
+  useEffect(() => {
+    // 1. Profile Visibility
+    if (storeUser?.profile?.visibility) {
+      setVisibility(storeUser.profile.visibility);
+    }
+
+    // 2. Notifications
+    const savedNotifications = localStorage.getItem('swipegig-notifications');
+    if (savedNotifications) {
+      try {
+        setNotifications(JSON.parse(savedNotifications));
+      } catch (e) {}
+    }
+  }, [storeUser]);
+
+  const handleUpdateVisibility = async (newVisibility: 'PUBLIC' | 'RECRUITERS_ONLY' | 'PRIVATE') => {
+    if (!privyUser?.id) {
+      toast.error('You must connect your account first.');
+      return;
+    }
+
+    setIsUpdatingVisibility(true);
+    try {
+      const response = await fetch('/api/profile/update', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-privy-user-id': privyUser.id,
+        },
+        body: JSON.stringify({ visibility: newVisibility }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update profile visibility');
+      }
+
+      // Update local Zustand store
+      updateProfile({ visibility: newVisibility });
+      setVisibility(newVisibility);
+      toast.success(`Visibility set to ${newVisibility.toLowerCase().replace('_', ' ')}`);
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to update visibility setting');
+    } finally {
+      setIsUpdatingVisibility(false);
+    }
+  };
+
+  const handleToggleNotification = (key: string) => {
+    setNotifications((prev) => {
+      const next = { ...prev, [key]: !prev[key as keyof typeof prev] };
+      localStorage.setItem('swipegig-notifications', JSON.stringify(next));
+      return next;
+    });
+    toast.success('Notification preference updated!');
+  };
+
+  const handleExportData = () => {
+    if (!storeUser) {
+      toast.error('No user session found to export.');
+      return;
+    }
+
+    try {
+      const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify({
+        account: {
+          id: storeUser.id,
+          privyId: storeUser.privyId,
+          name: storeUser.name,
+          walletAddress: storeUser.walletAddress,
+          ensName: storeUser.ensName,
+          email: storeUser.email,
+          avatarUrl: storeUser.avatarUrl,
+          profileScore: storeUser.profileScore,
+          isVerified: storeUser.isVerified,
+          role: storeUser.role,
+        },
+        profile: storeUser.profile,
+        resume: storeUser.resume,
+      }, null, 2));
+
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute('href', dataStr);
+      downloadAnchor.setAttribute('download', `swipegig-export-${storeUser.id}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+      toast.success('Your profile data has been exported.');
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to export data');
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!privyUser?.id) return;
+    
+    const confirmed = confirm('WARNING: Are you sure you want to permanently delete your account? This will wipe your profile, resume, applications, saved jobs, and rewards. This action is completely irreversible.');
+    if (!confirmed) return;
+
+    const secondConfirm = confirm('Type "DELETE" to confirm your deletion request:');
+    if (secondConfirm !== true && String(secondConfirm).toUpperCase() !== 'DELETE') {
+      toast.error('Deletion cancelled. Confirmation text did not match.');
+      return;
+    }
+
+    try {
+      toast.loading('Deleting account...', { id: 'delete-loading' });
+      const response = await fetch('/api/profile/delete', {
+        method: 'DELETE',
+        headers: {
+          'x-privy-user-id': privyUser.id,
+        },
+      });
+
+      toast.dismiss('delete-loading');
+
+      if (response.ok) {
+        toast.success('Your account has been successfully deleted.');
+        // Sign out from Privy
+        await logout();
+      } else {
+        throw new Error('Failed to delete account');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to delete your account. Please try again.');
+    }
   };
 
   return (
@@ -60,28 +204,51 @@ export default function SettingsPage() {
               </h2>
             </div>
             <div className="divide-y divide-border">
-              <div className="flex items-center justify-between px-6 py-4">
+              <button
+                onClick={() => {
+                  if (privyUser?.email?.address) {
+                    toast.success('Email is already connected!');
+                  } else {
+                    linkEmail();
+                  }
+                }}
+                className="flex items-center justify-between px-6 py-4 w-full hover:bg-white/5 transition-colors text-left"
+              >
                 <div>
                   <p className="text-sm font-medium">Email</p>
-                  <p className="text-xs text-muted-foreground">{user?.email?.address || 'Not connected'}</p>
+                  <p className="text-xs text-muted-foreground">{privyUser?.email?.address || 'Click to link email'}</p>
                 </div>
                 <ChevronRight className="w-4 h-4 text-muted-foreground" />
-              </div>
-              <div className="flex items-center justify-between px-6 py-4">
+              </button>
+
+              <button
+                onClick={() => linkWallet()}
+                className="flex items-center justify-between px-6 py-4 w-full hover:bg-white/5 transition-colors text-left"
+              >
                 <div>
                   <p className="text-sm font-medium">Wallet</p>
                   <p className="text-xs text-muted-foreground font-mono">
-                    {user?.wallet?.address ? `${user.wallet.address.slice(0, 8)}...${user.wallet.address.slice(-6)}` : 'Not connected'}
+                    {privyUser?.wallet?.address ? `${privyUser.wallet.address.slice(0, 8)}...${privyUser.wallet.address.slice(-6)}` : 'Click to link wallet'}
                   </p>
                 </div>
                 <Wallet className="w-4 h-4 text-muted-foreground" />
-              </div>
+              </button>
+
               <div className="flex items-center justify-between px-6 py-4">
                 <div>
                   <p className="text-sm font-medium">Profile Visibility</p>
-                  <p className="text-xs text-muted-foreground">Public</p>
+                  <p className="text-xs text-muted-foreground">Control who can view your builder profile</p>
                 </div>
-                <Eye className="w-4 h-4 text-muted-foreground" />
+                <select
+                  value={visibility}
+                  onChange={(e) => handleUpdateVisibility(e.target.value as any)}
+                  disabled={isUpdatingVisibility}
+                  className="bg-background border border-border text-foreground text-xs rounded-xl focus:ring-primary focus:border-primary block p-2 outline-none cursor-pointer"
+                >
+                  <option value="PUBLIC">Public</option>
+                  <option value="RECRUITERS_ONLY">Recruiters Only</option>
+                  <option value="PRIVATE">Private</option>
+                </select>
               </div>
             </div>
           </motion.div>
@@ -141,10 +308,12 @@ export default function SettingsPage() {
               {Object.entries(notifications).map(([key, value]) => (
                 <button
                   key={key}
-                  onClick={() => setNotifications(prev => ({ ...prev, [key]: !prev[key as keyof typeof prev] }))}
+                  onClick={() => handleToggleNotification(key)}
                   className="flex items-center justify-between px-6 py-4 w-full hover:bg-white/5 transition-colors"
                 >
-                  <p className="text-sm font-medium capitalize">{key.replace(/([A-Z])/g, ' $1')}</p>
+                  <p className="text-sm font-medium capitalize text-left">
+                    {key.replace(/([A-Z])/g, ' $1')}
+                  </p>
                   {value ? (
                     <ToggleRight className="w-8 h-8 text-primary" />
                   ) : (
@@ -169,17 +338,23 @@ export default function SettingsPage() {
               </h2>
             </div>
             <div className="divide-y divide-border">
-              <button className="flex items-center justify-between px-6 py-4 w-full hover:bg-white/5 transition-colors">
+              <button
+                onClick={handleExportData}
+                className="flex items-center justify-between px-6 py-4 w-full hover:bg-white/5 transition-colors"
+              >
                 <div>
                   <p className="text-sm font-medium text-left">Export Data</p>
-                  <p className="text-xs text-muted-foreground">Download all your data as JSON</p>
+                  <p className="text-xs text-muted-foreground">Download all your profile and resume data as JSON</p>
                 </div>
                 <Download className="w-4 h-4 text-muted-foreground" />
               </button>
-              <button className="flex items-center justify-between px-6 py-4 w-full hover:bg-red-500/5 transition-colors group">
+              <button
+                onClick={handleDeleteAccount}
+                className="flex items-center justify-between px-6 py-4 w-full hover:bg-red-500/5 transition-colors group"
+              >
                 <div>
                   <p className="text-sm font-medium text-left text-red-400">Delete Account</p>
-                  <p className="text-xs text-muted-foreground">Permanently delete your account and data</p>
+                  <p className="text-xs text-muted-foreground">Permanently delete your account and profile data</p>
                 </div>
                 <Trash2 className="w-4 h-4 text-red-400" />
               </button>

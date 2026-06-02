@@ -27,7 +27,7 @@ export default function AuthSync() {
             body: JSON.stringify({
               email: user.email?.address || user.google?.email || user.github?.email || null,
               walletAddress: user.wallet?.address || null,
-              name: user.google?.name || user.github?.name || user.name || null,
+              name: user.google?.name || user.github?.name || null,
             }),
           });
           if (response.ok) {

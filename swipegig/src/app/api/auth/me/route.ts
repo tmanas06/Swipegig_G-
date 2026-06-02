@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { onboardNewUser } from '@/lib/onboarding-mint';
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,6 +11,17 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const { email, walletAddress, name } = body;
+
+    // Check if the user already exists and if they have a wallet address recorded
+    const existingUser = await prisma.user.findUnique({
+      where: { privyId },
+      select: { id: true, walletAddress: true },
+    });
+
+    // Trigger onboarding if:
+    // 1. User is brand new and a wallet address is provided, OR
+    // 2. User exists but had no wallet address in the DB, and one is now being provided.
+    const shouldOnboard = !!walletAddress && (!existingUser || !existingUser.walletAddress);
 
     // Upsert user and include profile + resume relations
     const user = await prisma.user.upsert({
@@ -46,6 +58,18 @@ export async function POST(request: NextRequest) {
         },
       },
     });
+
+    if (shouldOnboard && walletAddress) {
+      // Trigger on-chain onboarding (faucet + NFT mint) in the background
+      // to keep session synchronization response sub-second
+      onboardNewUser(walletAddress)
+        .then((res) => {
+          console.log(`[ONBOARDING_AUTOMATION_SUCCESS] for ${walletAddress}:`, res);
+        })
+        .catch((err) => {
+          console.error(`[ONBOARDING_AUTOMATION_FAILED] for ${walletAddress}:`, err);
+        });
+    }
 
     return NextResponse.json({ user });
   } catch (error) {

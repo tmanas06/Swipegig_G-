@@ -24,14 +24,24 @@ import { toast } from 'react-hot-toast';
 const SWIPE_THRESHOLD = 100;
 const SWIPE_VELOCITY = 0.3;
 
-const getSpringProps = (i: number) => ({
-  x: 0,
-  y: i * -4,
-  scale: 1 - i * 0.03,
-  rot: -2 + Math.random() * 4,
-  opacity: i < 3 ? 1 : 0,
-  immediate: false,
-});
+const getStableRotation = (i: number) => ((i * 37) % 8) - 4;
+
+const getSpringProps = (i: number, swipedIndicesSet: Set<number>) => {
+  const isSwiped = swipedIndicesSet.has(i);
+  if (isSwiped) {
+    return {
+      opacity: 0,
+    };
+  }
+  const relativeIndex = i - swipedIndicesSet.size;
+  return {
+    x: 0,
+    y: relativeIndex * -4,
+    scale: 1 - relativeIndex * 0.03,
+    rot: getStableRotation(i),
+    opacity: relativeIndex < 3 ? 1 : 0,
+  };
+};
 
 const transformCard = (r: number, s: number) =>
   `perspective(1500px) rotateX(2deg) rotateY(${r / 10}deg) rotateZ(${r}deg) scale(${s})`;
@@ -68,7 +78,7 @@ function getCompanyColor(company: string): string {
 export default function FeedPage() {
   const { user } = useUserStore();
   const [jobs, setJobs] = useState<any[]>([]);
-  const [gone] = useState(() => new Set<number>());
+  const [swipedIndices, setSwipedIndices] = useState<Set<number>>(() => new Set());
   const [actionIndicator, setActionIndicator] = useState<{ text: string; color: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -107,17 +117,29 @@ export default function FeedPage() {
     fetchJobs();
   }, [user]);
 
-  const [springs, api] = useSprings(jobs.length, (i) => ({
-    ...getSpringProps(i),
-    from: { x: 0, rot: 0, scale: 1.1, y: -1000, opacity: 0 },
-  }));
+  const [springs, api] = useSprings(
+    jobs.length,
+    (i) => ({
+      ...getSpringProps(i, swipedIndices),
+      from: { x: 0, rot: 0, scale: 1.1, y: -1000, opacity: 0 },
+      config: { tension: 500, friction: 50 },
+    }),
+    [jobs, swipedIndices]
+  );
 
-  // Force re-initialize springs when jobs list completes loading
+  // Reset deck when all jobs are swiped
   useEffect(() => {
-    if (jobs.length > 0) {
-      api.start((i) => getSpringProps(i));
+    if (jobs.length > 0 && swipedIndices.size === jobs.length) {
+      const timer = setTimeout(() => {
+        setSwipedIndices(new Set());
+        api.start((i) => ({
+          ...getSpringProps(i, new Set()),
+          config: { friction: 50, tension: 500 },
+        }));
+      }, 600);
+      return () => clearTimeout(timer);
     }
-  }, [jobs.length, api]);
+  }, [swipedIndices.size, jobs.length, api]);
 
   const generateCoverLetter = async (job: any) => {
     try {
@@ -260,62 +282,90 @@ export default function FeedPage() {
       }
 
       if (!active && trigger) {
-        gone.add(index);
         const action = Math.abs(mx) > Math.abs(my)
           ? (xDir > 0 ? 'save' : 'skip')
           : (yDir < 0 ? 'apply' : 'remind');
 
         handleSwipeAction(jobs[index], action);
+
+        setSwipedIndices(prev => {
+          const next = new Set(prev);
+          next.add(index);
+          return next;
+        });
       }
 
       api.start((i) => {
-        if (index !== i) return;
-        const isGone = gone.has(index);
-        const x = isGone
-          ? (Math.abs(mx) > Math.abs(my) ? (200 + window.innerWidth) * dir : 0)
-          : active
-          ? mx
-          : 0;
-        const y = isGone
-          ? (Math.abs(my) > Math.abs(mx) ? (200 + window.innerHeight) * yDirection : 0)
-          : active
-          ? my
-          : 0;
-        const rot = mx / 15 + (isGone ? dir * 10 * vx : 0);
-        const scale = active ? 1.05 : 1;
+        // 1. If this card is already swiped
+        if (swipedIndices.has(i) || (i === index && !active && trigger)) {
+          // If this is the card that was just swiped on release, animate it off-screen
+          if (i === index && !active && trigger) {
+            const x = (200 + window.innerWidth) * dir;
+            const y = Math.abs(my) > Math.abs(mx) ? (200 + window.innerHeight) * yDirection : 0;
+            const rot = mx / 15 + dir * 10 * vx;
+            return {
+              x,
+              y,
+              rot,
+              scale: 1,
+              opacity: 0,
+              config: { friction: 50, tension: 200 },
+            };
+          }
+          return { opacity: 0 };
+        }
+
+        // 2. If this is the card currently being dragged
+        if (i === index && active) {
+          const x = mx;
+          const y = my;
+          const rot = mx / 15;
+          const scale = 1.05;
+          return {
+            x,
+            y,
+            rot,
+            scale,
+            opacity: 1,
+            config: { friction: 50, tension: 800 },
+          };
+        }
+
+        // 3. For all other active cards in the stack
+        const relativeIndex = i - swipedIndices.size;
         return {
-          x,
-          y,
-          rot,
-          scale,
-          opacity: isGone ? 0 : 1,
-          config: { friction: 50, tension: active ? 800 : isGone ? 200 : 500 },
+          x: 0,
+          y: relativeIndex * -4,
+          scale: 1 - relativeIndex * 0.03,
+          rot: getStableRotation(i),
+          opacity: relativeIndex < 3 ? 1 : 0,
+          config: { friction: 50, tension: 500 },
         };
       });
-
-      if (!active && gone.size === jobs.length) {
-        setTimeout(() => {
-          gone.clear();
-          api.start((i) => getSpringProps(i));
-        }, 600);
-      }
     },
     { filterTaps: true, rubberband: true }
   );
 
   const handleButtonSwipe = useCallback(
     (direction: 'left' | 'right' | 'up' | 'down') => {
-      const currentIndex = jobs.length - 1 - gone.size;
-      if (currentIndex < 0) return;
+      // Find the first index that has not been swiped yet (top card in deck is index 0)
+      let currentIndex = -1;
+      for (let i = 0; i < jobs.length; i++) {
+        if (!swipedIndices.has(i)) {
+          currentIndex = i;
+          break;
+        }
+      }
+      if (currentIndex === -1) return;
 
-      gone.add(currentIndex);
       const action = direction === 'right' ? 'save' : direction === 'left' ? 'skip' : direction === 'up' ? 'apply' : 'remind';
       handleSwipeAction(jobs[currentIndex], action);
 
+      // 1. Animate the swiped card off screen immediately
+      const x = direction === 'left' ? -1000 : direction === 'right' ? 1000 : 0;
+      const y = direction === 'up' ? -1000 : direction === 'down' ? 1000 : 0;
       api.start((i) => {
         if (i !== currentIndex) return;
-        const x = direction === 'left' ? -1000 : direction === 'right' ? 1000 : 0;
-        const y = direction === 'up' ? -1000 : direction === 'down' ? 1000 : 0;
         return {
           x,
           y,
@@ -326,25 +376,39 @@ export default function FeedPage() {
         };
       });
 
-      if (gone.size === jobs.length) {
-        setTimeout(() => {
-          gone.clear();
-          api.start((i) => getSpringProps(i));
-        }, 600);
-      }
+      // 2. Update the swiped set state
+      setSwipedIndices(prev => {
+        const next = new Set(prev);
+        next.add(currentIndex);
+        return next;
+      });
     },
-    [api, gone, jobs, user]
+    [api, swipedIndices, jobs, user]
   );
 
   const handleUndo = useCallback(() => {
-    const lastGone = Array.from(gone).pop();
-    if (lastGone === undefined) return;
-    gone.delete(lastGone);
-    api.start((i) => {
-      if (i !== lastGone) return;
-      return getSpringProps(i);
+    // Get the last swiped index
+    const lastSwiped = Array.from(swipedIndices).pop();
+    if (lastSwiped === undefined) return;
+
+    // 1. Remove it from swipedIndices state
+    setSwipedIndices(prev => {
+      const next = new Set(prev);
+      next.delete(lastSwiped);
+      return next;
     });
-  }, [api, gone]);
+
+    // 2. Animate the restored card back onto the screen
+    api.start((i) => {
+      if (i !== lastSwiped) return;
+      const mockSet = new Set(swipedIndices);
+      mockSet.delete(lastSwiped);
+      return {
+        ...getSpringProps(lastSwiped, mockSet),
+        config: { friction: 50, tension: 500 },
+      };
+    });
+  }, [api, swipedIndices]);
 
   if (isLoading) {
     return (
@@ -366,7 +430,7 @@ export default function FeedPage() {
             Discover <span className="text-gradient-primary">Jobs</span>
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {jobs.length - gone.size} jobs remaining today
+            {jobs.length - swipedIndices.size} jobs remaining today
           </p>
         </div>
         <button className="p-2.5 rounded-xl glass hover:bg-white/10 transition-colors">
@@ -394,107 +458,115 @@ export default function FeedPage() {
         </AnimatePresence>
 
         {/* Cards */}
-        {springs.map(({ x, y, rot, scale, opacity }, i) => (
-          <animated.div
-            key={jobs[i].id}
-            className="absolute w-[340px] sm:w-[380px] will-change-transform touch-none"
-            style={{
-              x,
-              y,
-              opacity,
-              zIndex: jobs.length - i,
-            }}
-          >
+        {springs.map(({ x, y, rot, scale, opacity }, i) => {
+          const job = jobs[i];
+          if (!job) return null;
+          const isSwiped = swipedIndices.has(i);
+          return (
             <animated.div
-              {...bind(i)}
-              className="glass rounded-3xl p-6 cursor-grab active:cursor-grabbing gradient-border select-none bg-background/80 backdrop-blur-md"
+              key={job.id}
+              className={cn(
+                "absolute w-[340px] sm:w-[380px] will-change-transform touch-none",
+                isSwiped && "pointer-events-none"
+              )}
               style={{
-                transform: interpolate([rot, scale], transformCard),
+                x,
+                y,
+                opacity,
+                zIndex: jobs.length - i,
               }}
             >
-              {/* Company Header */}
-              <div className="flex items-start justify-between mb-5">
-                <div className="flex items-center gap-3">
-                  <div
-                    className={cn(
-                      'w-12 h-12 rounded-xl bg-gradient-to-br flex items-center justify-center text-white font-bold text-lg shrink-0',
-                      getCompanyColor(jobs[i].company)
-                    )}
-                  >
-                    {getCompanyInitial(jobs[i].company)}
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-lg leading-tight">{jobs[i].title}</h3>
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <Building2 className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span className="text-sm text-muted-foreground">{jobs[i].company}</span>
+              <animated.div
+                {...bind(i)}
+                className="glass rounded-3xl p-6 cursor-grab active:cursor-grabbing gradient-border select-none bg-background/80 backdrop-blur-md"
+                style={{
+                  transform: interpolate([rot, scale], transformCard),
+                }}
+              >
+                {/* Company Header */}
+                <div className="flex items-start justify-between mb-5">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={cn(
+                        'w-12 h-12 rounded-xl bg-gradient-to-br flex items-center justify-center text-white font-bold text-lg shrink-0',
+                        getCompanyColor(job.company)
+                      )}
+                    >
+                      {getCompanyInitial(job.company)}
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-lg leading-tight">{job.title}</h3>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <Building2 className="w-3.5 h-3.5 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">{job.company}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Match Score */}
-              {jobs[i].matchScore && (
-                <div
-                  className={cn(
-                    'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold mb-4 border',
-                    getMatchBg(jobs[i].matchScore)
-                  )}
-                >
-                  <Sparkles className={cn('w-3.5 h-3.5', getMatchColor(jobs[i].matchScore))} />
-                  <span className={getMatchColor(jobs[i].matchScore)}>
-                    {jobs[i].matchScore}% match
-                  </span>
-                </div>
-              )}
-
-              {/* Description */}
-              <p className="text-sm text-muted-foreground leading-relaxed mb-4 line-clamp-3">
-                {jobs[i].description}
-              </p>
-
-              {/* Skills */}
-              <div className="flex flex-wrap gap-2 mb-5">
-                {jobs[i].skills.slice(0, 5).map((skill: string) => (
-                  <span
-                    key={skill}
-                    className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-xs font-medium text-muted-foreground"
+                {/* Match Score */}
+                {job.matchScore && (
+                  <div
+                    className={cn(
+                      'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold mb-4 border',
+                      getMatchBg(job.matchScore)
+                    )}
                   >
-                    {skill}
-                  </span>
-                ))}
-              </div>
+                    <Sparkles className={cn('w-3.5 h-3.5', getMatchColor(job.matchScore))} />
+                    <span className={getMatchColor(job.matchScore)}>
+                      {job.matchScore}% match
+                    </span>
+                  </div>
+                )}
 
-              {/* Meta */}
-              <div className="flex items-center justify-between text-sm border-t border-border pt-4">
-                <div className="flex items-center gap-1.5 text-muted-foreground">
-                  <DollarSign className="w-3.5 h-3.5" />
-                  <span>
-                    {jobs[i].salaryMin && jobs[i].salaryMax
-                      ? `${formatCurrency(jobs[i].salaryMin!)} – ${formatCurrency(jobs[i].salaryMax!)}`
-                      : 'Competitive'}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5 text-muted-foreground">
-                  <MapPin className="w-3.5 h-3.5" />
-                  <span>{jobs[i].location || 'Remote'}</span>
-                </div>
-              </div>
+                {/* Description */}
+                <p className="text-sm text-muted-foreground leading-relaxed mb-4 line-clamp-3">
+                  {job.description}
+                </p>
 
-              {/* Web3 Badge */}
-              {jobs[i].isWeb3 && (
-                <div className="mt-3 flex items-center justify-end">
-                  <span className="badge-web3 text-xs px-2 py-0.5 rounded-full font-medium">
-                    Web3
-                  </span>
+                {/* Skills */}
+                <div className="flex flex-wrap gap-2 mb-5">
+                  {job.skills.slice(0, 5).map((skill: string) => (
+                    <span
+                      key={skill}
+                      className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-xs font-medium text-muted-foreground"
+                    >
+                      {skill}
+                    </span>
+                  ))}
                 </div>
-              )}
+
+                {/* Meta */}
+                <div className="flex items-center justify-between text-sm border-t border-border pt-4">
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <DollarSign className="w-3.5 h-3.5" />
+                    <span>
+                      {job.salaryMin && job.salaryMax
+                        ? `${formatCurrency(job.salaryMin!)} – ${formatCurrency(job.salaryMax!)}`
+                        : 'Competitive'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <MapPin className="w-3.5 h-3.5" />
+                    <span>{job.location || 'Remote'}</span>
+                  </div>
+                </div>
+
+                {/* Web3 Badge */}
+                {job.isWeb3 && (
+                  <div className="mt-3 flex items-center justify-end">
+                    <span className="badge-web3 text-xs px-2 py-0.5 rounded-full font-medium">
+                      Web3
+                    </span>
+                  </div>
+                )}
+              </animated.div>
             </animated.div>
-          </animated.div>
-        ))}
+          );
+        })}
 
         {/* Empty state */}
-        {(gone.size === jobs.length || jobs.length === 0) && (
+        {(swipedIndices.size === jobs.length || jobs.length === 0) && (
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}

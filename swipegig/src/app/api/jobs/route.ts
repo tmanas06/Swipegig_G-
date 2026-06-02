@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { syncJobsFromAPIs } from '@/lib/job-sync';
 
 const filterSchema = z.object({
   page: z.coerce.number().min(1).default(1),
@@ -95,12 +96,23 @@ const SEED_JOBS = [
 
 export async function GET(request: NextRequest) {
   try {
-    // Auto-seed if no jobs exist
+    // Auto-seed/sync if no jobs exist, or if we have never synced live Remotive jobs
     const count = await prisma.job.count();
-    if (count === 0) {
-      await prisma.job.createMany({
-        data: SEED_JOBS,
-      });
+    const remotiveSyncCount = await prisma.job.count({
+      where: { externalId: { startsWith: 'remotive-' } }
+    });
+
+    if (count === 0 || remotiveSyncCount === 0) {
+      console.log('[JOBS_API] Database is empty or has never synced live Remotive jobs. Running sync...');
+      const syncResult = await syncJobsFromAPIs();
+      
+      // Fallback to high-quality Web3 seed jobs if database is completely empty and sync failed
+      if (count === 0 && (!syncResult.success || syncResult.newJobs === 0)) {
+        console.log('[JOBS_API] Live sync failed and database is empty. Falling back to default Web3 seed jobs...');
+        await prisma.job.createMany({
+          data: SEED_JOBS,
+        });
+      }
     }
     const { searchParams } = new URL(request.url);
     const params = Object.fromEntries(searchParams);

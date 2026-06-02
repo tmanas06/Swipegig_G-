@@ -35,6 +35,8 @@ interface NFTItem {
   rarity: 'Legendary' | 'Epic' | 'Rare' | 'Common';
   mintDate: string;
   color: string;
+  isReal?: boolean;
+  contractAddress?: string;
 }
 
 const nftsData: NFTItem[] = [

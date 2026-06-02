@@ -36,16 +36,33 @@ export default function CoachPage() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToBottom = (behavior: 'smooth' | 'auto' = 'smooth') => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo({
+        top: scrollContainerRef.current.scrollHeight,
+        behavior,
+      });
+    }
+  };
+
+  const handleScroll = () => {
+    if (scrollContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+      // If user is within 100px of the bottom, enable auto-scroll
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
+      setShouldAutoScroll(isAtBottom);
+    }
   };
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    if (shouldAutoScroll) {
+      scrollToBottom('auto');
+    }
+  }, [messages, shouldAutoScroll]);
 
   const handleSubmit = async (text?: string) => {
     const messageText = text || input.trim();
@@ -62,6 +79,8 @@ export default function CoachPage() {
     setMessages(currentMessages);
     setInput('');
     setIsLoading(true);
+    setShouldAutoScroll(true); // Force auto-scroll to show new user message
+    setTimeout(() => scrollToBottom('smooth'), 50);
 
     try {
       const response = await fetch('/api/ai/chat', {
@@ -180,7 +199,11 @@ export default function CoachPage() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-6 py-6">
+      <div
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto px-6 py-6"
+      >
         {messages.length === 0 ? (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -279,7 +302,6 @@ export default function CoachPage() {
                 </div>
               </motion.div>
             )}
-            <div ref={messagesEndRef} />
           </div>
         )}
       </div>

@@ -48,8 +48,12 @@ export default function Navbar() {
           href="/feed"
           className="flex items-center gap-3 px-5 py-6 border-b border-border"
         >
-          <div className="w-8 h-8 rounded-xl gradient-hero flex items-center justify-center shrink-0">
-            <Zap className="w-4 h-4 text-white" />
+          <div className="w-8 h-8 rounded-xl overflow-hidden flex items-center justify-center shrink-0">
+            <img 
+              src="/logo.svg" 
+              alt="SwipeGig Logo" 
+              className="w-full h-full object-contain"
+            />
           </div>
           <span className="text-lg font-bold text-gradient-hero opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
             SwipeGig

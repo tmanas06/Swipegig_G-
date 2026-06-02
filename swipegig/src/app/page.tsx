@@ -108,8 +108,12 @@ export default function LandingPage() {
       <header className="relative z-10">
         <div className="max-w-7xl mx-auto px-6 py-5 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl gradient-hero flex items-center justify-center">
-              <Zap className="w-5 h-5 text-white" />
+            <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center">
+              <img
+                src="/logo.svg"
+                alt="SwipeGig Logo"
+                className="w-full h-full object-contain"
+              />
             </div>
             <span className="text-xl font-bold text-gradient-hero">SwipeGig</span>
           </Link>
@@ -406,8 +410,12 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-6 py-12">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl gradient-hero flex items-center justify-center">
-                <Zap className="w-4 h-4 text-white" />
+              <div className="w-8 h-8 rounded-xl overflow-hidden flex items-center justify-center">
+                <img
+                  src="/logo.svg"
+                  alt="SwipeGig Logo"
+                  className="w-full h-full object-contain"
+                />
               </div>
               <span className="text-lg font-bold text-gradient-hero">SwipeGig</span>
             </div>

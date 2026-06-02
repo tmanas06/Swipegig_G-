@@ -212,8 +212,12 @@ export default function OnboardingPage() {
                 exit={{ opacity: 0, x: -50 }}
                 className="text-center"
               >
-                <div className="w-20 h-20 rounded-3xl gradient-hero flex items-center justify-center mx-auto mb-8">
-                  <Zap className="w-8 h-8 text-white" />
+                <div className="w-20 h-20 rounded-3xl overflow-hidden flex items-center justify-center mx-auto mb-8">
+                  <img
+                    src="/logo.svg"
+                    alt="SwipeGig Logo"
+                    className="w-full h-full object-contain"
+                  />
                 </div>
                 <h2 className="text-3xl font-bold mb-4">
                   Welcome to <span className="text-gradient-hero">SwipeGig</span>

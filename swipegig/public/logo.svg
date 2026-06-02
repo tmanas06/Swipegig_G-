@@ -1,12 +1,96 @@
-<svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="heroGrad" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#00C853"/>
-      <stop offset="100%" stop-color="#7C3AED"/>
-    </linearGradient>
-  </defs>
-  <rect width="40" height="40" rx="10" fill="url(#heroGrad)"/>
-  <path d="M20 8L26 14L20 12L14 14L20 8Z" fill="white" opacity="0.9"/>
-  <path d="M12 18L20 32L28 18" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-  <path d="M15 22L20 28L25 22" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.6"/>
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .briefcase-body {
+      fill: #000000;
+      stroke: #ffffff;
+      stroke-width: 6;
+    }
+    .briefcase-handle {
+      stroke: #000000;
+      stroke-width: 18;
+      fill: none;
+      stroke-linecap: round;
+    }
+    .briefcase-handle-bg {
+      stroke: #ffffff;
+      stroke-width: 24;
+      fill: none;
+      stroke-linecap: round;
+    }
+    .briefcase-feet {
+      fill: #000000;
+      stroke: #ffffff;
+      stroke-width: 4;
+    }
+    .hat-brim {
+      fill: #7C3AED;
+      stroke: #ffffff;
+      stroke-width: 4;
+    }
+    .hat-crown {
+      fill: #7C3AED;
+      stroke: #ffffff;
+      stroke-width: 4;
+    }
+    .hat-band {
+      fill: #000000;
+    }
+    .sparkle {
+      fill: #7C3AED;
+    }
+    .triangle-outer {
+      fill: #ffffff;
+    }
+    .triangle-inner {
+      fill: #7C3AED;
+    }
+    
+    /* Theme-specific overrides */
+    [data-theme="light"] .briefcase-body,
+    [data-theme="light"] .briefcase-feet {
+      fill: #000000;
+      stroke: none;
+    }
+    [data-theme="light"] .briefcase-handle {
+      stroke: #000000;
+    }
+    [data-theme="light"] .briefcase-handle-bg {
+      stroke: none;
+    }
+    [data-theme="light"] .hat-brim,
+    [data-theme="light"] .hat-crown {
+      stroke: none;
+    }
+  </style>
+
+  <!-- Briefcase Handle Background (for dark mode contrast) -->
+  <path d="M 216,192 L 216,165 C 216,150 296,150 296,165 L 296,192" class="briefcase-handle-bg" />
+
+  <!-- Briefcase Handle -->
+  <path d="M 216,192 L 216,165 C 216,150 296,150 296,165 L 296,192" class="briefcase-handle" />
+
+  <!-- Briefcase Feet -->
+  <rect x="176" y="388" width="24" height="14" rx="4" class="briefcase-feet" />
+  <rect x="312" y="388" width="24" height="14" rx="4" class="briefcase-feet" />
+
+  <!-- Briefcase Body -->
+  <rect x="128" y="192" width="256" height="200" rx="36" class="briefcase-body" />
+
+  <!-- Inner Triangle Outer Shape (White Flask/Triangle) -->
+  <path d="M 256,218 C 270,248 320,323 330,338 C 335,346 325,348 300,348 L 212,348 C 187,348 177,346 182,338 C 192,323 242,248 256,218 Z" class="triangle-outer" />
+
+  <!-- Inner Triangle Inner Shape (Purple Flask/Triangle) -->
+  <path d="M 256,242 C 265,265 300,317 308,329 C 312,335 302,337 288,337 L 224,337 C 210,337 200,335 204,329 C 212,317 247,265 256,242 Z" class="triangle-inner" />
+
+  <!-- Witch Hat Brim (Rotated) -->
+  <ellipse cx="250" cy="142" rx="100" ry="18" class="hat-brim" transform="rotate(-8 250 142)" />
+
+  <!-- Witch Hat Crown -->
+  <path d="M 195,135 C 205,105 210,75 190,60 C 180,52 170,58 185,48 C 215,30 260,35 275,65 C 285,85 290,110 292,135 Z" class="hat-crown" />
+
+  <!-- Witch Hat Band -->
+  <path d="M 196,133 C 218,125 272,125 291,133 L 292,135 C 271,128 219,128 195,135 Z" class="hat-band" />
+
+  <!-- Purple Sparkle -->
+  <path d="M 356,120 Q 356,130 366,130 Q 356,130 356,140 Q 356,130 346,130 Q 356,130 356,120 Z" class="sparkle" />
 </svg>

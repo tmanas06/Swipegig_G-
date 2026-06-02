@@ -470,7 +470,7 @@ export default function OnboardingPage() {
           )}
 
           <button
-            onClick={handleNext}
+            onClick={() => handleNext(false)}
             disabled={isUploading}
             className="flex items-center gap-2 px-6 py-2.5 rounded-xl gradient-hero text-black font-semibold text-sm hover:shadow-lg hover:shadow-primary/20 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >

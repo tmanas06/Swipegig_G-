@@ -20,13 +20,17 @@ import {
   X,
   Plus,
   Save,
+  Wallet,
+  Copy,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUserStore } from '@/stores/useUserStore';
 import { toast } from 'react-hot-toast';
+import { usePrivy } from '@privy-io/react-auth';
 
 export default function ProfilePage() {
   const { user, isLoading, setUser } = useUserStore();
+  const { user: privyUser } = usePrivy();
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -314,6 +318,20 @@ export default function ProfilePage() {
                 <p className="text-muted-foreground mb-3 text-sm md:text-base leading-snug">
                   {headline || 'Web3 Builder'}
                 </p>
+                {privyUser?.wallet?.address && (
+                  <div 
+                    onClick={() => {
+                      navigator.clipboard.writeText(privyUser.wallet?.address || '');
+                      toast.success('Wallet address copied!');
+                    }}
+                    className="inline-flex items-center gap-1.5 bg-white/5 border border-white/10 hover:border-primary/30 px-3 py-1.5 rounded-xl text-xs font-mono text-muted-foreground hover:text-foreground transition-all duration-200 group cursor-pointer mb-3"
+                    title="Click to copy wallet address"
+                  >
+                    <Wallet className="w-3.5 h-3.5 text-primary" />
+                    <span>{`${privyUser.wallet.address.slice(0, 6)}...${privyUser.wallet.address.slice(-4)}`}</span>
+                    <Copy className="w-3 h-3 opacity-40 group-hover:opacity-100 transition-opacity ml-0.5 shrink-0" />
+                  </div>
+                )}
 
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
                   {location && (

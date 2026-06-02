@@ -216,7 +216,7 @@ export default function FeedPage() {
           body: JSON.stringify({ jobId: job.id }),
         });
         if (res.ok) {
-          toast.success(`Saved ${job.title}!`);
+          toast.success('Saved!');
         }
       } else if (action === 'apply') {
         toast.loading('AI is crafting cover letter & applying...', { id: 'apply-loading' });
@@ -259,7 +259,7 @@ export default function FeedPage() {
           body: JSON.stringify({ jobId: job.id, remindAt: tomorrow.toISOString() }),
         });
         if (res.ok) {
-          toast.success(`Saved to remind you tomorrow!`);
+          toast.success('Reminder set!');
         }
       }
     } catch (e) {

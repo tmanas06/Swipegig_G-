@@ -110,23 +110,26 @@ export default function Providers({ children }: { children: ReactNode }) {
           <Toaster
             position="bottom-right"
             toastOptions={{
-              duration: 4000,
+              duration: 2500,
               style: {
-                background: '#12141a',
-                color: '#f0f2f5',
-                border: '1px solid rgba(255, 255, 255, 0.06)',
-                borderRadius: '12px',
-                backdropFilter: 'blur(20px)',
+                background: 'var(--card)',
+                color: 'var(--foreground)',
+                border: '1px solid var(--border)',
+                borderRadius: '16px',
+                fontSize: '14px',
+                fontWeight: '500',
+                padding: '10px 16px',
+                boxShadow: '0 10px 30px -10px rgba(0, 0, 0, 0.15)',
               },
               success: {
                 iconTheme: {
-                  primary: '#00C853',
-                  secondary: '#000000',
+                  primary: 'var(--primary)',
+                  secondary: 'var(--primary-foreground)',
                 },
               },
               error: {
                 iconTheme: {
-                  primary: '#ef4444',
+                  primary: 'var(--destructive)',
                   secondary: '#ffffff',
                 },
               },

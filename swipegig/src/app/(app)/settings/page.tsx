@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Bell,
   Moon,
@@ -16,6 +16,7 @@ import {
   ToggleLeft,
   ToggleRight,
   ChevronRight,
+  Loader2,
 } from 'lucide-react';
 import { usePrivy, useLinkAccount } from '@privy-io/react-auth';
 import { cn } from '@/lib/utils';
@@ -30,6 +31,12 @@ export default function SettingsPage() {
 
   const [visibility, setVisibility] = useState<'PUBLIC' | 'RECRUITERS_ONLY' | 'PRIVATE'>('PUBLIC');
   const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
+  
+  // Custom Delete Modal states
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deleteInput, setDeleteInput] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const [notifications, setNotifications] = useState({
     email: true,
     inApp: true,
@@ -147,18 +154,19 @@ export default function SettingsPage() {
     }
   };
 
-  const handleDeleteAccount = async () => {
-    if (!privyUser?.id) return;
-    
-    const confirmed = confirm('WARNING: Are you sure you want to permanently delete your account? This will wipe your profile, resume, applications, saved jobs, and rewards. This action is completely irreversible.');
-    if (!confirmed) return;
+  const openDeleteModal = () => {
+    setDeleteInput('');
+    setIsDeleteModalOpen(true);
+  };
 
-    const secondConfirm = confirm('Type "DELETE" to confirm your deletion request:');
-    if (secondConfirm !== true && String(secondConfirm).toUpperCase() !== 'DELETE') {
-      toast.error('Deletion cancelled. Confirmation text did not match.');
+  const handleConfirmDelete = async () => {
+    if (!privyUser?.id) return;
+    if (deleteInput !== 'DELETE') {
+      toast.error('Please type "DELETE" to confirm.');
       return;
     }
 
+    setIsDeleting(true);
     try {
       toast.loading('Deleting account...', { id: 'delete-loading' });
       const response = await fetch('/api/profile/delete', {
@@ -172,6 +180,7 @@ export default function SettingsPage() {
 
       if (response.ok) {
         toast.success('Your account has been successfully deleted.');
+        setIsDeleteModalOpen(false);
         // Sign out from Privy
         await logout();
       } else {
@@ -180,6 +189,8 @@ export default function SettingsPage() {
     } catch (err) {
       console.error(err);
       toast.error('Failed to delete your account. Please try again.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -349,7 +360,7 @@ export default function SettingsPage() {
                 <Download className="w-4 h-4 text-muted-foreground" />
               </button>
               <button
-                onClick={handleDeleteAccount}
+                onClick={openDeleteModal}
                 className="flex items-center justify-between px-6 py-4 w-full hover:bg-red-500/5 transition-colors group"
               >
                 <div>
@@ -377,6 +388,77 @@ export default function SettingsPage() {
           </motion.div>
         </div>
       </div>
+
+      {/* Delete Account Confirmation Modal */}
+      <AnimatePresence>
+        {isDeleteModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => !isDeleting && setIsDeleteModalOpen(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+
+            {/* Modal Card */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+              className="relative w-full max-w-md glass rounded-3xl p-8 border border-red-500/20 shadow-2xl bg-background/95 backdrop-blur-md z-10"
+            >
+              <h3 className="text-xl font-bold text-red-500 mb-2 flex items-center gap-2">
+                <Trash2 className="w-5 h-5" />
+                Delete Account
+              </h3>
+              <p className="text-sm text-muted-foreground leading-relaxed mb-6">
+                WARNING: This will permanently wipe your profile, resume, applications, saved jobs, and rewards. This action is completely irreversible.
+              </p>
+
+              <div className="space-y-4 mb-6">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">
+                  Type <span className="text-red-500 font-mono font-bold">DELETE</span> to confirm:
+                </label>
+                <input
+                  type="text"
+                  value={deleteInput}
+                  onChange={(e) => setDeleteInput(e.target.value)}
+                  placeholder="DELETE"
+                  disabled={isDeleting}
+                  className="w-full glass rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-red-500 bg-transparent placeholder:text-muted-foreground/30 font-mono text-center tracking-widest text-red-500 font-bold"
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setIsDeleteModalOpen(false)}
+                  disabled={isDeleting}
+                  className="flex-1 px-4 py-3 rounded-xl glass hover:bg-white/10 text-sm font-medium transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmDelete}
+                  disabled={deleteInput !== 'DELETE' || isDeleting}
+                  className="flex-1 px-4 py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-semibold text-sm transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  {isDeleting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    'Delete Account'
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

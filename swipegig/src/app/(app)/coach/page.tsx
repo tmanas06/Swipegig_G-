@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Send,
@@ -30,6 +30,113 @@ const suggestedPrompts = [
   { icon: BookOpen, text: 'Help me prepare for a Solidity interview', color: 'text-purple-400' },
   { icon: MessageSquare, text: 'Write a cover letter for Aave Protocol', color: 'text-orange-400' },
 ];
+
+function parseInlineMarkdown(text: string): ReactNode[] {
+  const regex = /(\*\*.*?\*\*|`.*?`)/g;
+  const parts = text.split(regex);
+  return parts.map((part, index) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return (
+        <strong key={index} className="font-semibold text-foreground">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    if (part.startsWith('`') && part.endsWith('`')) {
+      return (
+        <code key={index} className="px-1.5 py-0.5 rounded bg-white/5 font-mono text-xs text-purple-300 border border-white/5">
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+    return part;
+  });
+}
+
+function MarkdownRenderer({ content }: { content: string }) {
+  const lines = content.split('\n');
+  const elements: ReactNode[] = [];
+  
+  let currentList: ReactNode[] = [];
+  let currentListType: 'bullet' | 'number' | null = null;
+  let listKey = 0;
+
+  const flushList = () => {
+    if (currentList.length > 0) {
+      if (currentListType === 'bullet') {
+        elements.push(
+          <ul key={`ul-${listKey++}`} className="list-disc pl-5 my-2 space-y-1 text-muted-foreground">
+            {currentList}
+          </ul>
+        );
+      } else if (currentListType === 'number') {
+        elements.push(
+          <ol key={`ol-${listKey++}`} className="list-decimal pl-5 my-2 space-y-1 text-muted-foreground">
+            {currentList}
+          </ol>
+        );
+      }
+      currentList = [];
+      currentListType = null;
+    }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith('### ')) {
+      flushList();
+      elements.push(
+        <h3 key={i} className="text-base font-bold text-foreground mt-4 mb-2 first:mt-0">
+          {parseInlineMarkdown(trimmed.slice(4))}
+        </h3>
+      );
+    } else if (trimmed.startsWith('#### ')) {
+      flushList();
+      elements.push(
+        <h4 key={i} className="text-sm font-semibold text-foreground mt-3 mb-1.5 first:mt-0">
+          {parseInlineMarkdown(trimmed.slice(5))}
+        </h4>
+      );
+    } else if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+      if (currentListType !== 'bullet') {
+        flushList();
+        currentListType = 'bullet';
+      }
+      currentList.push(
+        <li key={i} className="text-sm leading-relaxed">
+          {parseInlineMarkdown(trimmed.slice(2))}
+        </li>
+      );
+    } else if (/^\d+\.\s/.test(trimmed)) {
+      if (currentListType !== 'number') {
+        flushList();
+        currentListType = 'number';
+      }
+      const match = trimmed.match(/^(\d+)\.\s(.*)/);
+      const itemContent = match ? match[2] : trimmed;
+      currentList.push(
+        <li key={i} className="text-sm leading-relaxed">
+          {parseInlineMarkdown(itemContent)}
+        </li>
+      );
+    } else if (trimmed === '') {
+      flushList();
+    } else {
+      flushList();
+      elements.push(
+        <p key={i} className="text-sm leading-relaxed text-muted-foreground my-2 first:mt-0 last:mb-0">
+          {parseInlineMarkdown(line)}
+        </p>
+      );
+    }
+  }
+
+  flushList();
+
+  return <div className="space-y-1">{elements}</div>;
+}
 
 export default function CoachPage() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -260,9 +367,13 @@ export default function CoachPage() {
                         : 'glass'
                     )}
                   >
-                    <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                      {msg.content}
-                    </p>
+                    {msg.role === 'assistant' ? (
+                      <MarkdownRenderer content={msg.content} />
+                    ) : (
+                      <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                        {msg.content}
+                      </p>
+                    )}
                     {msg.role === 'assistant' && (
                       <button
                         onClick={() => handleCopy(msg.id, msg.content)}

@@ -207,8 +207,8 @@ export default function AdminPage() {
     );
   }
 
-  const isDeployed = (addr: string | null) =>
-    addr && addr !== '0x0000000000000000000000000000000000000000';
+  const isDeployed = (addr: string | null | undefined) =>
+    !!addr && addr !== '0x0000000000000000000000000000000000000000';
 
   const statCards = [
     { label: 'Total Users', value: stats?.totalUsers ?? 0, icon: Users, color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20' },

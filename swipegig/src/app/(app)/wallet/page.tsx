@@ -22,6 +22,7 @@ import {
 import { toast } from 'react-hot-toast';
 import { createWalletClient, custom, parseEther } from 'viem';
 import { celoSepolia } from 'viem/chains';
+import GoodDollarVerifyGate from '@/components/GoodDollarVerifyGate';
 
 // GoodDollar is not deployed on Celo Sepolia testnet — placeholder for future
 const GOOD_DOLLAR_ADDRESS = '0xC12D1c73a457c1c5cd70eE8B790c50F46ec563Fa';
@@ -258,7 +259,8 @@ export default function WalletPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8 page-enter pb-24">
+    <GoodDollarVerifyGate feature="wallet">
+      <div className="max-w-5xl mx-auto px-6 py-8 page-enter pb-24">
       {/* Header card */}
       <div className="glass rounded-3xl p-6 sm:p-8 mb-8 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-[300px] h-[300px] bg-emerald-500/10 rounded-full blur-[100px] pointer-events-none" />
@@ -761,6 +763,7 @@ export default function WalletPage() {
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+      </div>
+    </GoodDollarVerifyGate>
   );
 }

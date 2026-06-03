@@ -17,6 +17,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { cn, formatGDollars } from '@/lib/utils';
+import GoodDollarVerifyGate from '@/components/GoodDollarVerifyGate';
 
 const mockRewards = {
   balance: 425,
@@ -54,7 +55,8 @@ const achievements = [
 
 export default function RewardsPage() {
   return (
-    <div className="min-h-screen bg-background page-enter">
+    <GoodDollarVerifyGate feature="rewards">
+      <div className="min-h-screen bg-background page-enter">
       <div className="max-w-6xl mx-auto px-6 py-8">
         <h1 className="text-2xl font-bold mb-6">
           G$ <span className="text-gradient-primary">Rewards</span>
@@ -220,5 +222,6 @@ export default function RewardsPage() {
         </div>
       </div>
     </div>
-  );
+  </GoodDollarVerifyGate>
+);
 }

@@ -79,6 +79,17 @@ model User {
   loginStreak   Int       @default(0)
   lastLoginAt   DateTime?
   onboardedOnChain Boolean  @default(false)
+  
+  // GoodDollar Proof of Humanity
+  isGoodDollarVerified    Boolean   @default(false)
+  goodDollarVerifiedAt    DateTime?
+  goodDollarAddress       String?   // wallet address that was verified
+  lastAuthenticatedAt     DateTime? // from contract's lastAuthenticated()
+  
+  // AI Coach prompt limiting
+  aiPromptsUsed           Int       @default(0)
+  aiPromptsLimit          Int       @default(5)
+
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

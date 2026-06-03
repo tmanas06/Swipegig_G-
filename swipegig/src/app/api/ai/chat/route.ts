@@ -1,16 +1,78 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
+import { prisma } from '@/lib/prisma';
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
 
+interface AiAccessResult {
+  allowed: boolean;
+  remaining: number | null; // null = unlimited (verified)
+  used: number;
+  limit: number;
+}
+
+async function checkAiAccess(privyUserId: string): Promise<AiAccessResult> {
+  const user = await prisma.user.findUnique({
+    where: { privyId: privyUserId },
+    select: {
+      isGoodDollarVerified: true,
+      aiPromptsUsed: true,
+      aiPromptsLimit: true,
+    },
+  });
+
+  if (!user) {
+    return { allowed: false, remaining: 0, used: 0, limit: 5 };
+  }
+
+  if (user.isGoodDollarVerified) {
+    return { allowed: true, remaining: null, used: user.aiPromptsUsed, limit: user.aiPromptsLimit };
+  }
+
+  const remaining = Math.max(0, user.aiPromptsLimit - user.aiPromptsUsed);
+  return {
+    allowed: remaining > 0,
+    remaining,
+    used: user.aiPromptsUsed,
+    limit: user.aiPromptsLimit,
+  };
+}
+
 export async function POST(request: NextRequest) {
   try {
+    const privyUserId = request.headers.get('x-privy-user-id');
     const { messages } = await request.json();
 
     if (!messages || !Array.isArray(messages)) {
       return NextResponse.json({ error: 'Messages array required' }, { status: 400 });
+    }
+
+    // Check AI access if user is authenticated
+    if (privyUserId) {
+      const access = await checkAiAccess(privyUserId);
+
+      if (!access.allowed) {
+        return NextResponse.json(
+          {
+            error: 'prompt_limit_reached',
+            message: 'Verify with GoodDollar to unlock unlimited AI coaching',
+            promptsUsed: access.used,
+            promptsLimit: access.limit,
+            promptsRemaining: 0,
+          },
+          { status: 403 }
+        );
+      }
+
+      // Increment prompt count for unverified users
+      if (access.remaining !== null) {
+        await prisma.user.update({
+          where: { privyId: privyUserId },
+          data: { aiPromptsUsed: { increment: 1 } },
+        });
+      }
     }
 
     const systemPrompt = `You are SwipeGig's AI Career Coach — an expert career advisor specializing in Web3 and blockchain jobs.

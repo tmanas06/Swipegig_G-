@@ -16,6 +16,10 @@ import {
   Check,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { usePrivy } from '@privy-io/react-auth';
+import { useGoodDollarVerification } from '@/hooks/useGoodDollarVerification';
+import AiPromptCounter from '@/components/AiPromptCounter';
+import { toast } from 'react-hot-toast';
 
 interface Message {
   id: string;
@@ -147,6 +151,9 @@ export default function CoachPage() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
 
+  const { user } = usePrivy();
+  const { isVerified, aiPromptsUsed, aiPromptsLimit, refetch: refetchVerification } = useGoodDollarVerification();
+
   const scrollToBottom = (behavior: 'smooth' | 'auto' = 'smooth') => {
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTo({
@@ -194,6 +201,7 @@ export default function CoachPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-privy-user-id': user?.id || '',
         },
         body: JSON.stringify({
           messages: currentMessages.map((m) => ({
@@ -204,6 +212,24 @@ export default function CoachPage() {
       });
 
       if (!response.ok) {
+        if (response.status === 403) {
+          const errData = await response.json();
+          if (errData.error === 'prompt_limit_reached') {
+            refetchVerification();
+            toast.error('AI prompt limit reached. Please verify with GoodDollar.');
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: crypto.randomUUID(),
+                role: 'assistant',
+                content: `🔒 **AI Prompt Limit Reached**\n\nYou have used all your free AI prompts. To continue chatting with your AI Career Coach and unlock advanced tools, please verify your identity with GoodDollar.\n\n[Verify in Settings](/settings)`,
+                timestamp: new Date(),
+              },
+            ]);
+            setIsLoading(false);
+            return;
+          }
+        }
         throw new Error('Failed to get response');
       }
 
@@ -262,6 +288,7 @@ export default function CoachPage() {
           }
         }
       }
+      refetchVerification();
     } catch (error) {
       console.error('[AI_CHAT_ERROR]', error);
       const assistantMessage: Message = {
@@ -419,28 +446,48 @@ export default function CoachPage() {
 
       {/* Input */}
       <div className="shrink-0 border-t border-border px-6 py-4">
-        <div className="max-w-3xl mx-auto relative">
-          <textarea
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Ask me about your career, resume, interviews..."
-            rows={1}
-            className="w-full glass rounded-2xl px-5 py-3.5 pr-14 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/50 bg-transparent"
-          />
-          <button
-            onClick={() => handleSubmit()}
-            disabled={!input.trim() || isLoading}
-            className={cn(
-              'absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-xl flex items-center justify-center transition-all',
-              input.trim() && !isLoading
-                ? 'gradient-hero text-black hover:shadow-lg hover:shadow-primary/20'
-                : 'bg-white/5 text-muted-foreground cursor-not-allowed'
-            )}
-          >
-            <Send className="w-4 h-4" />
-          </button>
+        <div className="max-w-3xl mx-auto space-y-3">
+          {(!isVerified && aiPromptsLimit - aiPromptsUsed <= 0) ? (
+            <AiPromptCounter 
+              used={aiPromptsUsed} 
+              limit={aiPromptsLimit} 
+              isVerified={isVerified} 
+            />
+          ) : (
+            <>
+              <div className="flex justify-between items-center text-xs text-muted-foreground px-1">
+                <span>Claude AI is ready to help</span>
+                <AiPromptCounter 
+                  used={aiPromptsUsed} 
+                  limit={aiPromptsLimit} 
+                  isVerified={isVerified} 
+                />
+              </div>
+              <div className="relative">
+                <textarea
+                  ref={inputRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Ask me about your career, resume, interviews..."
+                  rows={1}
+                  className="w-full glass rounded-2xl px-5 py-3.5 pr-14 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/50 bg-transparent"
+                />
+                <button
+                  onClick={() => handleSubmit()}
+                  disabled={!input.trim() || isLoading}
+                  className={cn(
+                    'absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-xl flex items-center justify-center transition-all',
+                    input.trim() && !isLoading
+                      ? 'gradient-hero text-black hover:shadow-lg hover:shadow-primary/20'
+                      : 'bg-white/5 text-muted-foreground cursor-not-allowed'
+                  )}
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

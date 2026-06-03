@@ -17,17 +17,41 @@ import {
   ToggleRight,
   ChevronRight,
   Loader2,
+  ExternalLink,
+  CheckCircle,
+  AlertTriangle,
+  XCircle,
 } from 'lucide-react';
 import { usePrivy, useLinkAccount } from '@privy-io/react-auth';
 import { cn } from '@/lib/utils';
 import { useUserStore } from '@/stores/useUserStore';
 import { useAppStore } from '@/stores/useAppStore';
 import { toast } from 'react-hot-toast';
+import { useGoodDollarVerification } from '@/hooks/useGoodDollarVerification';
+import { useCheckGoodDollarStatus } from '@/hooks/useCheckGoodDollarStatus';
+import { GOODDOLLAR_WALLET_URL } from '@/lib/gooddollar/constants';
 
 export default function SettingsPage() {
   const { logout, user: privyUser } = usePrivy();
   const { user: storeUser, updateProfile } = useUserStore();
   const { theme, toggleTheme } = useAppStore();
+  const {
+    isVerified: gdVerified,
+    verifiedAt: gdVerifiedAt,
+    goodDollarAddress,
+    aiPromptsUsed,
+    aiPromptsLimit,
+    aiPromptsRemaining,
+    isLoading: gdLoading,
+    refetch: refetchGdStatus,
+  } = useGoodDollarVerification();
+  const {
+    checkStatus,
+    isChecking,
+    result: checkResult,
+    message: checkMessage,
+    error: checkError,
+  } = useCheckGoodDollarStatus();
 
   const [visibility, setVisibility] = useState<'PUBLIC' | 'RECRUITERS_ONLY' | 'PRIVATE'>('PUBLIC');
   const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
@@ -45,7 +69,7 @@ export default function SettingsPage() {
   });
 
   const { linkEmail, linkWallet } = useLinkAccount({
-    onSuccess: (user) => {
+    onSuccess: () => {
       toast.success('Account linked successfully!');
     },
     onError: (error) => {
@@ -194,6 +218,15 @@ export default function SettingsPage() {
     }
   };
 
+  const handleCheckVerification = () => {
+    const walletAddress = privyUser?.wallet?.address;
+    if (walletAddress) {
+      checkStatus(walletAddress);
+    } else {
+      toast.error('Connect a wallet first to check verification.');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background page-enter">
       <div className="max-w-3xl mx-auto px-6 py-8">
@@ -202,10 +235,183 @@ export default function SettingsPage() {
         </h1>
 
         <div className="space-y-6">
+          {/* Identity Verification */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="glass rounded-2xl overflow-hidden"
+            id="verification"
+          >
+            <div className="px-6 py-4 border-b border-border">
+              <h2 className="font-semibold flex items-center gap-2">
+                <Shield className="w-4 h-4 text-green-400" />
+                Identity Verification
+              </h2>
+            </div>
+            <div className="p-6">
+              {gdLoading ? (
+                <div className="flex items-center gap-3 py-4">
+                  <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                  <span className="text-sm text-muted-foreground">Checking verification status...</span>
+                </div>
+              ) : gdVerified ? (
+                /* Verified State */
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 px-4 py-4 rounded-xl bg-green-500/10 border border-green-500/20">
+                    <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center shrink-0">
+                      <CheckCircle className="w-5 h-5 text-green-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-green-400">GoodDollar Verified Human ✓</p>
+                      {gdVerifiedAt && (
+                        <p className="text-xs text-green-400/60 mt-0.5">
+                          Verified on {gdVerifiedAt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="glass rounded-xl px-4 py-3">
+                      <p className="text-xs text-muted-foreground mb-1">Wallet</p>
+                      <p className="font-mono text-xs truncate">
+                        {goodDollarAddress ? `${goodDollarAddress.slice(0, 8)}...${goodDollarAddress.slice(-6)}` : '—'}
+                      </p>
+                    </div>
+                    <div className="glass rounded-xl px-4 py-3">
+                      <p className="text-xs text-muted-foreground mb-1">AI Coaching</p>
+                      <p className="text-xs font-semibold text-green-400">Unlimited ∞</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* Unverified State */
+                <div className="space-y-4">
+                  <div className="text-center py-4">
+                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-green-500/20 to-emerald-500/20 border border-green-500/30 flex items-center justify-center mx-auto mb-4">
+                      <span className="text-2xl">🌍</span>
+                    </div>
+                    <h3 className="font-bold text-base mb-2">Verify with GoodDollar</h3>
+                    <p className="text-xs text-muted-foreground max-w-sm mx-auto leading-relaxed mb-4">
+                      Complete a quick face verification to prove you&apos;re a unique human.
+                      Unlock G$ rewards, wallet access, unlimited AI coaching, and more.
+                    </p>
+
+                    <div className="space-y-3 text-left mb-6 max-w-xs mx-auto">
+                      {[
+                        'G$ wallet and token rewards',
+                        'Unlimited AI career coaching',
+                        'Job Seekers Pool access',
+                        'Creator marketplace',
+                      ].map((item) => (
+                        <div key={item} className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <div className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />
+                          {item}
+                        </div>
+                      ))}
+                    </div>
+
+                    <button
+                      onClick={() => window.open(GOODDOLLAR_WALLET_URL, '_blank')}
+                      className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 text-white font-semibold text-sm hover:shadow-lg hover:shadow-green-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
+                    >
+                      Verify with GoodDollar
+                      <ExternalLink className="w-4 h-4" />
+                    </button>
+
+                    <p className="text-[11px] text-muted-foreground/50 mt-2">
+                      Takes ~2 minutes · Free forever
+                    </p>
+                  </div>
+
+                  <div className="border-t border-border pt-4">
+                    <button
+                      onClick={handleCheckVerification}
+                      disabled={isChecking || !privyUser?.wallet?.address}
+                      className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-white/10 hover:bg-white/5 text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      {isChecking ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Checking on-chain status...
+                        </>
+                      ) : (
+                        <>
+                          <Shield className="w-4 h-4" />
+                          Check My Verification Status
+                        </>
+                      )}
+                    </button>
+
+                    {/* Check Result Feedback */}
+                    {checkResult === 'verified' && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="flex items-center gap-2 mt-3 px-4 py-3 rounded-xl bg-green-500/10 border border-green-500/20 text-green-400 text-sm"
+                      >
+                        <CheckCircle className="w-5 h-5 shrink-0" />
+                        <span className="font-medium">Verified! Unlocking features...</span>
+                      </motion.div>
+                    )}
+
+                    {checkResult === 'not_verified' && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="flex items-start gap-2 mt-3 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-sm"
+                      >
+                        <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+                        <span>{checkMessage}</span>
+                      </motion.div>
+                    )}
+
+                    {checkResult === 'expired' && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="flex items-start gap-2 mt-3 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-sm"
+                      >
+                        <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+                        <span>{checkMessage}</span>
+                      </motion.div>
+                    )}
+
+                    {checkError && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="flex items-start gap-2 mt-3 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm"
+                      >
+                        <XCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                        <span>{checkError}</span>
+                      </motion.div>
+                    )}
+
+                    {!privyUser?.wallet?.address && (
+                      <p className="text-xs text-muted-foreground mt-2 text-center">
+                        Connect a wallet first to check your status.
+                      </p>
+                    )}
+
+                    {/* AI prompt status */}
+                    <div className="mt-4 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>
+                        AI Coach: {aiPromptsRemaining !== null ? `${aiPromptsRemaining} of ${aiPromptsLimit} free prompts left` : 'Unlimited'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </motion.div>
+
           {/* Account */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 }}
             className="glass rounded-2xl overflow-hidden"
           >
             <div className="px-6 py-4 border-b border-border">
@@ -252,7 +458,7 @@ export default function SettingsPage() {
                 </div>
                 <select
                   value={visibility}
-                  onChange={(e) => handleUpdateVisibility(e.target.value as any)}
+                  onChange={(e) => handleUpdateVisibility(e.target.value as 'PUBLIC' | 'RECRUITERS_ONLY' | 'PRIVATE')}
                   disabled={isUpdatingVisibility}
                   className="bg-background border border-border text-foreground text-xs rounded-xl focus:ring-primary focus:border-primary block p-2 outline-none cursor-pointer"
                 >
@@ -268,7 +474,7 @@ export default function SettingsPage() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.05 }}
+            transition={{ delay: 0.1 }}
             className="glass rounded-2xl overflow-hidden"
           >
             <div className="px-6 py-4 border-b border-border">
@@ -306,7 +512,7 @@ export default function SettingsPage() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
+            transition={{ delay: 0.15 }}
             className="glass rounded-2xl overflow-hidden"
           >
             <div className="px-6 py-4 border-b border-border">
@@ -339,7 +545,7 @@ export default function SettingsPage() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
+            transition={{ delay: 0.2 }}
             className="glass rounded-2xl overflow-hidden"
           >
             <div className="px-6 py-4 border-b border-border">
@@ -376,7 +582,7 @@ export default function SettingsPage() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
+            transition={{ delay: 0.25 }}
           >
             <button
               onClick={() => logout()}

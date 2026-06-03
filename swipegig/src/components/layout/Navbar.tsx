@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { usePrivy } from '@privy-io/react-auth';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -19,9 +19,12 @@ import {
   Wallet,
   ChevronRight,
   ShieldCheck,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUserStore } from '@/stores/useUserStore';
+import { useGoodDollarVerification } from '@/hooks/useGoodDollarVerification';
+import VerificationStatusBadge from '@/components/VerificationStatusBadge';
 
 const navItems = [
   { href: '/feed', label: 'Swipe', icon: Zap, color: 'text-green-400' },
@@ -34,12 +37,128 @@ const navItems = [
   { href: '/settings', label: 'Settings', icon: Settings, color: 'text-gray-400' },
 ];
 
+function CelebrationModal({ onClose }: { onClose: () => void }) {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 6000);
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-md"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.8, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.8, opacity: 0 }}
+        transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+        className="glass rounded-3xl p-10 max-w-md w-full mx-6 text-center relative overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Confetti-like decorations */}
+        <div className="absolute inset-0 pointer-events-none">
+          {Array.from({ length: 20 }).map((_, i) => (
+            <motion.div
+              key={i}
+              className="absolute w-2 h-2 rounded-full"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                backgroundColor: ['#22c55e', '#10b981', '#34d399', '#6ee7b7', '#a7f3d0', '#fbbf24', '#a78bfa'][i % 7],
+              }}
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{
+                scale: [0, 1, 0.5],
+                opacity: [0, 1, 0],
+                y: [0, -20, 20],
+              }}
+              transition={{
+                duration: 2,
+                delay: i * 0.1,
+                repeat: Infinity,
+                repeatDelay: 1,
+              }}
+            />
+          ))}
+        </div>
+
+        {/* Green checkmark */}
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ type: 'spring', delay: 0.2, damping: 15 }}
+          className="w-20 h-20 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center mx-auto mb-6 shadow-xl shadow-green-500/30"
+        >
+          <ShieldCheck className="w-10 h-10 text-white" />
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+        >
+          <h2 className="text-2xl font-bold mb-2">
+            🎉 You&apos;re GoodDollar Verified!
+          </h2>
+          <p className="text-muted-foreground text-sm mb-6">
+            You now have access to:
+          </p>
+
+          <div className="space-y-2 text-left mb-8">
+            {[
+              'G$ wallet and rewards',
+              'Job Seekers Pool (daily G$ stream)',
+              'Creator marketplace',
+              'Unlimited AI coaching',
+            ].map((item) => (
+              <div key={item} className="flex items-center gap-2 text-sm">
+                <div className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center shrink-0">
+                  <Sparkles className="w-3 h-3 text-green-400" />
+                </div>
+                <span className="text-foreground">{item}</span>
+              </div>
+            ))}
+          </div>
+
+          <Link
+            href="/rewards"
+            onClick={onClose}
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 text-white font-semibold text-sm hover:shadow-lg hover:shadow-green-500/25 transition-all"
+          >
+            Start Earning G$
+            <ChevronRight className="w-4 h-4" />
+          </Link>
+        </motion.div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 export default function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { authenticated, user, logout, login } = usePrivy();
   const { user: storeUser } = useUserStore();
+  const { isVerified, verifiedAt } = useGoodDollarVerification();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showCelebration, setShowCelebration] = useState(false);
   const isAdmin = storeUser?.role === 'ADMIN';
+
+  // Check for ?verified=true query param
+  useEffect(() => {
+    if (searchParams.get('verified') === 'true') {
+      setShowCelebration(true);
+      // Remove the query param from URL
+      const url = new URL(window.location.href);
+      url.searchParams.delete('verified');
+      router.replace(url.pathname, { scroll: false });
+    }
+  }, [searchParams, router]);
 
   // Build nav items dynamically — include Admin only for admin users
   const allNavItems = [
@@ -52,6 +171,13 @@ export default function Navbar() {
 
   return (
     <>
+      {/* Celebration Modal */}
+      <AnimatePresence>
+        {showCelebration && (
+          <CelebrationModal onClose={() => setShowCelebration(false)} />
+        )}
+      </AnimatePresence>
+
       {/* Desktop Sidebar */}
       <nav className="hidden lg:flex fixed left-0 top-0 h-screen w-[72px] hover:w-[240px] flex-col glass border-r border-border z-50 transition-all duration-300 group overflow-hidden">
         {/* Logo */}
@@ -102,8 +228,16 @@ export default function Navbar() {
           })}
         </div>
 
-        {/* User Section */}
-        <div className="border-t border-border px-3 py-4">
+        {/* Verification Badge + User Section */}
+        <div className="border-t border-border px-3 py-4 space-y-3">
+          {authenticated && (
+            <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+              <VerificationStatusBadge
+                isVerified={isVerified}
+                verifiedAt={verifiedAt}
+              />
+            </div>
+          )}
           {authenticated ? (
             <button
               onClick={() => logout()}
@@ -186,14 +320,23 @@ export default function Navbar() {
               className="absolute bottom-0 left-0 right-0 glass rounded-t-3xl p-6 pb-10"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold">Menu</h3>
-                <button
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="p-2 rounded-xl hover:bg-white/10 transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+                <div className="flex items-center gap-3">
+                  {authenticated && (
+                    <VerificationStatusBadge
+                      isVerified={isVerified}
+                      verifiedAt={verifiedAt}
+                      compact
+                    />
+                  )}
+                  <button
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="p-2 rounded-xl hover:bg-white/10 transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-2">

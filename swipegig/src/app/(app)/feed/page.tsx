@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useSprings, animated, to as interpolate } from '@react-spring/web';
 import { useDrag } from '@use-gesture/react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -75,6 +75,20 @@ function getCompanyColor(company: string): string {
   return companyColors[initial] || 'from-gray-500 to-gray-600';
 }
 
+function formatJobLocation(mode: string, location: string): string {
+  const cleanLoc = location || '';
+  if (mode === 'HYBRID') {
+    return cleanLoc ? `Hybrid (${cleanLoc})` : 'Hybrid';
+  }
+  if (mode === 'ONSITE') {
+    return cleanLoc ? `Onsite (${cleanLoc})` : 'Onsite';
+  }
+  if (!cleanLoc || cleanLoc.toLowerCase() === 'remote') {
+    return 'Remote';
+  }
+  return `Remote (${cleanLoc})`;
+}
+
 export default function FeedPage() {
   const { user } = useUserStore();
   const [jobs, setJobs] = useState<any[]>([]);
@@ -82,9 +96,34 @@ export default function FeedPage() {
   const [actionIndicator, setActionIndicator] = useState<{ text: string; color: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchJobs = async () => {
+  // Active filter states used for the API call
+  const [activeSearch, setActiveSearch] = useState('');
+  const [activeJobType, setActiveJobType] = useState('ALL');
+  const [activeJobMode, setActiveJobMode] = useState('ALL');
+  const [activeIsWeb3, setActiveIsWeb3] = useState(false);
+
+  // Modal open state
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  // Temporary filter states inside the modal
+  const [tempSearch, setTempSearch] = useState('');
+  const [tempJobType, setTempJobType] = useState('ALL');
+  const [tempJobMode, setTempJobMode] = useState('ALL');
+  const [tempIsWeb3, setTempIsWeb3] = useState(false);
+
+  const fetchJobs = async (filtersObj?: { search: string; type: string; mode: string; isWeb3: boolean }) => {
+    setIsLoading(true);
     try {
-      const response = await fetch('/api/jobs');
+      const params = new URLSearchParams();
+      if (filtersObj) {
+        if (filtersObj.search.trim()) params.append('search', filtersObj.search.trim());
+        if (filtersObj.type !== 'ALL') params.append('type', filtersObj.type);
+        if (filtersObj.mode !== 'ALL') params.append('mode', filtersObj.mode);
+        if (filtersObj.isWeb3) params.append('isWeb3', 'true');
+      }
+
+      const response = await fetch(`/api/jobs?${params.toString()}`);
       if (response.ok) {
         const data = await response.json();
         const userSkills = user?.profile?.skills || [];
@@ -104,6 +143,7 @@ export default function FeedPage() {
         // Sort by match score
         processedJobs.sort((a: any, b: any) => (b.matchScore || 0) - (a.matchScore || 0));
         setJobs(processedJobs);
+        setSwipedIndices(new Set()); // Reset card deck whenever query changes
       }
     } catch (error) {
       console.error('Failed to load jobs:', error);
@@ -113,9 +153,58 @@ export default function FeedPage() {
     }
   };
 
+  // Fetch jobs on mount, user load, or active filter changes
   useEffect(() => {
-    fetchJobs();
-  }, [user]);
+    fetchJobs({
+      search: activeSearch,
+      type: activeJobType,
+      mode: activeJobMode,
+      isWeb3: activeIsWeb3,
+    });
+  }, [user, activeSearch, activeJobType, activeJobMode, activeIsWeb3]);
+
+  // Sync temporary modal filters with active applied filters on modal open
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    if (isFilterOpen) {
+      if (!dialog.open) {
+        setTempSearch(activeSearch);
+        setTempJobType(activeJobType);
+        setTempJobMode(activeJobMode);
+        setTempIsWeb3(activeIsWeb3);
+        dialog.showModal();
+      }
+    } else {
+      if (dialog.open) {
+        dialog.close();
+      }
+    }
+  }, [isFilterOpen, activeSearch, activeJobType, activeJobMode, activeIsWeb3]);
+
+  const handleApplyFilters = () => {
+    setActiveSearch(tempSearch);
+    setActiveJobType(tempJobType);
+    setActiveJobMode(tempJobMode);
+    setActiveIsWeb3(tempIsWeb3);
+    setIsFilterOpen(false);
+    toast.success('Filters applied');
+  };
+
+  const handleClearFilters = () => {
+    setTempSearch('');
+    setTempJobType('ALL');
+    setTempJobMode('ALL');
+    setTempIsWeb3(false);
+
+    setActiveSearch('');
+    setActiveJobType('ALL');
+    setActiveJobMode('ALL');
+    setActiveIsWeb3(false);
+    setIsFilterOpen(false);
+    toast.success('Filters cleared');
+  };
 
   const [springs, api] = useSprings(
     jobs.length,
@@ -410,6 +499,8 @@ export default function FeedPage() {
     });
   }, [api, swipedIndices]);
 
+  const hasActiveFilters = activeSearch || activeJobType !== 'ALL' || activeJobMode !== 'ALL' || activeIsWeb3;
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -433,13 +524,23 @@ export default function FeedPage() {
             {jobs.length - swipedIndices.size} jobs remaining today
           </p>
         </div>
-        <button className="p-2.5 rounded-xl glass hover:bg-white/10 transition-colors">
-          <Filter className="w-5 h-5 text-muted-foreground" />
+        <button
+          onClick={() => setIsFilterOpen(true)}
+          className={cn(
+            "p-2.5 rounded-xl glass hover:bg-white/10 transition-all duration-200 relative cursor-pointer",
+            hasActiveFilters && "border border-primary/50 bg-primary/5 shadow-lg shadow-primary/5"
+          )}
+          title="Filter Jobs"
+        >
+          <Filter className={cn("w-5 h-5", hasActiveFilters ? "text-primary" : "text-muted-foreground")} />
+          {hasActiveFilters && (
+            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-primary animate-pulse" />
+          )}
         </button>
       </div>
 
       {/* Card Stack */}
-      <div className="relative flex items-center justify-center h-[calc(100vh-220px)] lg:h-[calc(100vh-160px)] overflow-hidden">
+      <div className="relative flex items-center justify-center h-[calc(100vh-220px)] lg:h-[calc(100vh-160px)] overflow-hidden animate-fade-in">
         {/* Action Indicator */}
         <AnimatePresence>
           {actionIndicator && (
@@ -448,7 +549,7 @@ export default function FeedPage() {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
               className={cn(
-                'absolute top-8 z-50 px-6 py-3 rounded-2xl glass font-bold text-2xl',
+                'absolute top-8 z-50 px-6 py-3 rounded-2xl glass font-bold text-2xl shadow-2xl backdrop-blur-md',
                 actionIndicator.color
               )}
             >
@@ -478,7 +579,7 @@ export default function FeedPage() {
             >
               <animated.div
                 {...bind(i)}
-                className="glass rounded-3xl p-6 cursor-grab active:cursor-grabbing gradient-border select-none bg-background/80 backdrop-blur-md"
+                className="glass rounded-3xl p-6 cursor-grab active:cursor-grabbing gradient-border select-none bg-background/80 backdrop-blur-md shadow-2xl"
                 style={{
                   transform: interpolate([rot, scale], transformCard),
                 }}
@@ -488,7 +589,7 @@ export default function FeedPage() {
                   <div className="flex items-center gap-3">
                     <div
                       className={cn(
-                        'w-12 h-12 rounded-xl bg-gradient-to-br flex items-center justify-center text-white font-bold text-lg shrink-0',
+                        'w-12 h-12 rounded-xl bg-gradient-to-br flex items-center justify-center text-white font-bold text-lg shrink-0 shadow-inner',
                         getCompanyColor(job.company)
                       )}
                     >
@@ -548,7 +649,7 @@ export default function FeedPage() {
                   </div>
                   <div className="flex items-center gap-1.5 text-muted-foreground">
                     <MapPin className="w-3.5 h-3.5" />
-                    <span>{job.location || 'Remote'}</span>
+                    <span>{formatJobLocation(job.mode, job.location)}</span>
                   </div>
                 </div>
 
@@ -565,18 +666,43 @@ export default function FeedPage() {
           );
         })}
 
-        {/* Empty state */}
+        {/* Empty state / No jobs matching filters state */}
         {(swipedIndices.size === jobs.length || jobs.length === 0) && (
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="text-center"
+            className="text-center px-6 max-w-sm"
           >
-            <div className="w-20 h-20 rounded-full glass flex items-center justify-center mx-auto mb-4">
-              <Sparkles className="w-8 h-8 text-primary" />
+            <div className="w-20 h-20 rounded-full glass flex items-center justify-center mx-auto mb-4 border border-white/10 shadow-lg">
+              <Sparkles className="w-8 h-8 text-primary animate-pulse" />
             </div>
-            <h3 className="text-xl font-bold mb-2">All caught up!</h3>
-            <p className="text-muted-foreground">Check back later for more jobs.</p>
+            {jobs.length === 0 && hasActiveFilters ? (
+              <>
+                <h3 className="text-xl font-bold mb-2">No matching jobs</h3>
+                <p className="text-muted-foreground mb-5 text-sm">
+                  We couldn't find any opportunities matching your active filters. Try adjusting them!
+                </p>
+                <div className="flex items-center gap-3 justify-center">
+                  <button
+                    onClick={() => setIsFilterOpen(true)}
+                    className="px-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-sm font-semibold hover:bg-white/10 transition-all cursor-pointer"
+                  >
+                    Adjust Filters
+                  </button>
+                  <button
+                    onClick={handleClearFilters}
+                    className="px-4 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:opacity-90 transition-all shadow-lg shadow-primary/20 cursor-pointer"
+                  >
+                    Clear Filters
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 className="text-xl font-bold mb-2">All caught up!</h3>
+                <p className="text-muted-foreground text-sm">Check back later for more jobs.</p>
+              </>
+            )}
           </motion.div>
         )}
       </div>
@@ -630,6 +756,123 @@ export default function FeedPage() {
           </button>
         </div>
       </div>
+
+      {/* Filter Modal Dialog */}
+      <dialog
+        ref={dialogRef}
+        onCancel={(e) => {
+          e.preventDefault();
+          setIsFilterOpen(false);
+        }}
+        className="rounded-3xl p-6 glass backdrop:bg-black/60 backdrop:backdrop-blur-sm max-w-md w-full border border-white/10 bg-background/95 text-foreground overflow-visible shadow-2xl fixed inset-0 m-auto"
+      >
+        <div className="flex flex-col gap-5">
+          <div className="flex items-center justify-between pb-3 border-b border-white/10">
+            <h2 className="text-xl font-bold flex items-center gap-2">
+              <Filter className="w-5 h-5 text-primary" />
+              Filter Jobs
+            </h2>
+            <button
+              onClick={() => setIsFilterOpen(false)}
+              className="p-1.5 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Search Keyword */}
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Search Keyword</label>
+            <input
+              type="text"
+              value={tempSearch}
+              onChange={(e) => setTempSearch(e.target.value)}
+              placeholder="e.g. Solidity, Front-end, Engineer"
+              className="px-4 py-3 rounded-xl bg-white/5 border border-white/10 focus:border-primary/50 outline-none transition-all text-sm w-full text-white placeholder:text-muted-foreground"
+            />
+          </div>
+
+          {/* Job Type Grid */}
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Job Type</label>
+            <div className="grid grid-cols-3 gap-2">
+              {['ALL', 'FULL_TIME', 'PART_TIME', 'CONTRACT', 'FREELANCE', 'INTERNSHIP'].map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setTempJobType(t)}
+                  className={cn(
+                    'px-3 py-2.5 rounded-xl text-[10px] font-bold border transition-all text-center truncate cursor-pointer',
+                    tempJobType === t
+                      ? 'bg-primary border-primary text-white shadow-lg shadow-primary/20 scale-102 font-extrabold'
+                      : 'bg-white/5 border-white/10 text-muted-foreground hover:bg-white/10 hover:text-foreground'
+                  )}
+                >
+                  {t === 'ALL' ? 'ALL TYPES' : t.replace('_', ' ')}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Work Mode */}
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Work Mode</label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {['ALL', 'REMOTE', 'HYBRID', 'ONSITE'].map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setTempJobMode(m)}
+                  className={cn(
+                    'px-3 py-2.5 rounded-xl text-[10px] font-bold border transition-all text-center truncate cursor-pointer',
+                    tempJobMode === m
+                      ? 'bg-primary border-primary text-white shadow-lg shadow-primary/20 scale-102 font-extrabold'
+                      : 'bg-white/5 border-white/10 text-muted-foreground hover:bg-white/10 hover:text-foreground'
+                  )}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Web3 Toggle */}
+          <div className="flex items-center justify-between py-3 px-4 rounded-xl bg-white/5 border border-white/10">
+            <div className="flex flex-col">
+              <span className="text-sm font-semibold">Web3 Only</span>
+              <span className="text-[10px] text-muted-foreground">Show only blockchain/crypto jobs</span>
+            </div>
+            <button
+              onClick={() => setTempIsWeb3(!tempIsWeb3)}
+              className={cn(
+                'w-11 h-6 rounded-full transition-colors relative outline-none border border-transparent cursor-pointer',
+                tempIsWeb3 ? 'bg-primary' : 'bg-white/20'
+              )}
+            >
+              <div
+                className={cn(
+                  'w-4 h-4 rounded-full bg-white absolute top-0.8 transition-all',
+                  tempIsWeb3 ? 'left-6' : 'left-1'
+                )}
+              />
+            </button>
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center gap-3 pt-4 border-t border-white/10 mt-2">
+            <button
+              onClick={handleClearFilters}
+              className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-sm font-semibold transition-colors cursor-pointer"
+            >
+              Clear All
+            </button>
+            <button
+              onClick={handleApplyFilters}
+              className="flex-1 py-3 rounded-xl bg-primary text-white text-sm font-semibold hover:opacity-90 shadow-lg shadow-primary/20 transition-all cursor-pointer"
+            >
+              Apply Filters
+            </button>
+          </div>
+        </div>
+      </dialog>
     </div>
   );
 }

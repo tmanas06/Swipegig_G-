@@ -55,6 +55,8 @@ interface AdminUser {
   walletAddress: string | null;
   role: 'SEEKER' | 'RECRUITER' | 'ADMIN';
   isVerified: boolean;
+  isGoodDollarVerified: boolean;
+  goodDollarAddress: string | null;
   profileScore: number;
   loginStreak: number;
   lastLoginAt: string | null;
@@ -428,8 +430,13 @@ export default function AdminPage() {
                               <p className="font-medium text-foreground">{u.name || 'Unnamed'}</p>
                               <p className="text-[11px] text-muted-foreground">{u.email || 'No email'}</p>
                               {u.walletAddress && (
-                                <p className="text-[10px] text-muted-foreground/60 font-mono mt-0.5">
-                                  {u.walletAddress.slice(0, 8)}...{u.walletAddress.slice(-6)}
+                                <p className="text-[10px] text-muted-foreground/60 font-mono mt-0.5" title="Privy Embedded Wallet">
+                                  Privy: {u.walletAddress.slice(0, 8)}...{u.walletAddress.slice(-6)}
+                                </p>
+                              )}
+                              {u.goodDollarAddress && (
+                                <p className="text-[10px] text-green-400 font-mono mt-0.5" title="GoodWallet Address">
+                                  G$: {u.goodDollarAddress.slice(0, 8)}...{u.goodDollarAddress.slice(-6)}
                                 </p>
                               )}
                             </div>
@@ -447,17 +454,31 @@ export default function AdminPage() {
                             </select>
                           </td>
                           <td className="px-5 py-4">
-                            <button
-                              onClick={() => handleUpdateUser(u.id, { isVerified: !u.isVerified })}
-                              disabled={updatingUserId === u.id}
-                              className="cursor-pointer"
-                            >
-                              {u.isVerified ? (
-                                <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-                              ) : (
-                                <XCircle className="w-5 h-5 text-muted-foreground/40" />
+                            <div className="flex flex-col gap-1.5">
+                              <button
+                                onClick={() => handleUpdateUser(u.id, { isVerified: !u.isVerified })}
+                                disabled={updatingUserId === u.id}
+                                className="cursor-pointer flex items-center gap-1.5 hover:opacity-80"
+                              >
+                                {u.isVerified ? (
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                                ) : (
+                                  <XCircle className="w-4 h-4 text-muted-foreground/40" />
+                                )}
+                                <span className="text-xs">{u.isVerified ? 'Verified' : 'Unverified'}</span>
+                              </button>
+                              {u.isVerified && (
+                                u.goodDollarAddress ? (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-green-500/10 border border-green-500/20 text-green-400 font-semibold w-fit">
+                                    On-Chain Verified
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 font-semibold w-fit">
+                                    Admin Override
+                                  </span>
+                                )
                               )}
-                            </button>
+                            </div>
                           </td>
                           <td className="px-5 py-4">
                             <div className="flex items-center gap-3 text-[11px] text-muted-foreground">

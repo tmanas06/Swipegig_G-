@@ -20,6 +20,7 @@ import { usePrivy } from '@privy-io/react-auth';
 import { useGoodDollarVerification } from '@/hooks/useGoodDollarVerification';
 import AiPromptCounter from '@/components/AiPromptCounter';
 import { toast } from 'react-hot-toast';
+import { useRouter } from 'next/navigation';
 
 interface Message {
   id: string;
@@ -141,8 +142,8 @@ function MarkdownRenderer({ content }: { content: string }) {
 
   return <div className="space-y-1">{elements}</div>;
 }
-
 export default function CoachPage() {
+  const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -452,6 +453,7 @@ export default function CoachPage() {
               used={aiPromptsUsed} 
               limit={aiPromptsLimit} 
               isVerified={isVerified} 
+              onVerifyClick={() => router.push('/settings')}
             />
           ) : (
             <>
@@ -461,6 +463,7 @@ export default function CoachPage() {
                   used={aiPromptsUsed} 
                   limit={aiPromptsLimit} 
                   isVerified={isVerified} 
+                  onVerifyClick={() => router.push('/settings')}
                 />
               </div>
               <div className="relative">

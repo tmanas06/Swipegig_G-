@@ -1,100 +1,51 @@
 'use client';
 
-import { useState, useCallback } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePrivy } from '@privy-io/react-auth';
-
-type CheckResult = 'verified' | 'not_verified' | 'expired' | null;
 
 interface CheckStatusResponse {
   verified: boolean;
   reason?: string;
   message?: string;
-  lastAuthenticated?: number;
+  goodDollarAddress?: string;
+  expiresAt?: number | null;
   error?: string;
 }
 
-interface UseCheckGoodDollarStatusReturn {
-  checkStatus: (walletAddress: string) => Promise<void>;
-  isChecking: boolean;
-  result: CheckResult;
-  message: string | null;
-  error: string | null;
-  reset: () => void;
-}
-
-export function useCheckGoodDollarStatus(): UseCheckGoodDollarStatusReturn {
+export function useCheckGoodDollarStatus() {
   const { user } = usePrivy();
   const queryClient = useQueryClient();
-  const [result, setResult] = useState<CheckResult>(null);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  const mutation = useMutation({
-    mutationFn: async (walletAddress: string): Promise<CheckStatusResponse> => {
+  const mutation = useMutation<CheckStatusResponse, Error, string>({
+    mutationFn: async (goodWalletAddress: string) => {
       const response = await fetch('/api/gooddollar/check-status', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-privy-user-id': user?.id ?? '',
         },
-        body: JSON.stringify({ walletAddress }),
+        body: JSON.stringify({ goodWalletAddress }),
       });
 
-      const data: CheckStatusResponse = await response.json();
+      const resData = await response.json();
 
-      if (!response.ok && response.status !== 429) {
-        throw new Error(data.message || data.error || 'Failed to check status');
+      if (!response.ok) {
+        throw new Error(resData.message || resData.error || 'Failed to check verification status');
       }
 
-      return data;
+      return resData;
     },
     onSuccess: (data) => {
       if (data.verified) {
-        setResult('verified');
-        setMessage(data.message || 'You are GoodDollar verified!');
-        setError(null);
-        // Invalidate the status query so all gates update
         queryClient.invalidateQueries({ queryKey: ['gooddollar-status'] });
-      } else if (data.reason === 'expired') {
-        setResult('expired');
-        setMessage(data.message || 'Your verification has expired.');
-        setError(null);
-      } else {
-        setResult('not_verified');
-        setMessage(data.message || 'Not verified yet.');
-        setError(null);
       }
-    },
-    onError: (err: Error) => {
-      setResult(null);
-      setMessage(null);
-      setError(err.message || 'Could not check verification status. Please try again.');
     },
   });
 
-  const checkStatus = useCallback(
-    async (walletAddress: string) => {
-      setResult(null);
-      setMessage(null);
-      setError(null);
-      await mutation.mutateAsync(walletAddress);
-    },
-    [mutation]
-  );
-
-  const reset = useCallback(() => {
-    setResult(null);
-    setMessage(null);
-    setError(null);
-  }, []);
-
   return {
-    checkStatus,
-    isChecking: mutation.isPending,
-    result,
-    message,
-    error,
-    reset,
+    mutate: mutation.mutate,
+    isPending: mutation.isPending,
+    data: mutation.data ?? null,
+    error: mutation.error,
   };
 }

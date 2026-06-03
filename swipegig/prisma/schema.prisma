@@ -83,8 +83,9 @@ model User {
   // GoodDollar Proof of Humanity
   isGoodDollarVerified    Boolean   @default(false)
   goodDollarVerifiedAt    DateTime?
-  goodDollarAddress       String?   // wallet address that was verified
+  goodDollarAddress       String?   @unique // wallet address that was verified
   lastAuthenticatedAt     DateTime? // from contract's lastAuthenticated()
+  verificationExpiredAt   DateTime? // computed: lastAuthenticatedAt + authPeriod days
   
   // AI Coach prompt limiting
   aiPromptsUsed           Int       @default(0)
@@ -275,4 +276,14 @@ model Recruiter {
 
   @@index([userId])
   @@index([verified])
+}
+
+// ─── Verification Check Log ──────────────────────────────
+
+model VerificationCheckLog {
+  id        String   @id @default(cuid())
+  userId    String
+  checkedAt DateTime @default(now())
+
+  @@index([userId, checkedAt])
 }

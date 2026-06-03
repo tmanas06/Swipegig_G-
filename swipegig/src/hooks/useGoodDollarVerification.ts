@@ -3,58 +3,51 @@
 import { useQuery } from '@tanstack/react-query';
 import { usePrivy } from '@privy-io/react-auth';
 
-interface GoodDollarStatus {
+interface GoodDollarStatusResponse {
   isVerified: boolean;
   verifiedAt: string | null;
   goodDollarAddress: string | null;
-  aiPromptsUsed: number;
-  aiPromptsLimit: number;
-  aiPromptsRemaining: number | null; // null = unlimited (verified)
-}
-
-interface UseGoodDollarVerificationReturn {
-  isVerified: boolean;
-  verifiedAt: Date | null;
-  goodDollarAddress: string | null;
+  expiresAt: string | null;
   aiPromptsUsed: number;
   aiPromptsLimit: number;
   aiPromptsRemaining: number | null;
-  isLoading: boolean;
-  refetch: () => void;
+  isExpiringSoon: boolean;
 }
 
-async function fetchGoodDollarStatus(privyUserId: string): Promise<GoodDollarStatus> {
-  const response = await fetch('/api/gooddollar/status', {
-    headers: { 'x-privy-user-id': privyUserId },
-  });
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch verification status');
-  }
-
-  return response.json();
-}
-
-export function useGoodDollarVerification(): UseGoodDollarVerificationReturn {
+export function useGoodDollarVerification() {
   const { user, authenticated } = usePrivy();
   const privyUserId = user?.id;
 
-  const { data, isLoading, refetch } = useQuery({
+  const query = useQuery<GoodDollarStatusResponse>({
     queryKey: ['gooddollar-status', privyUserId],
-    queryFn: () => fetchGoodDollarStatus(privyUserId!),
+    queryFn: async () => {
+      if (!privyUserId) throw new Error('Not authenticated');
+      const res = await fetch('/api/gooddollar/status', {
+        headers: {
+          'x-privy-user-id': privyUserId,
+        },
+      });
+      if (!res.ok) {
+        throw new Error('Failed to fetch verification status');
+      }
+      return res.json();
+    },
     enabled: !!privyUserId && authenticated,
-    staleTime: 30 * 1000, // 30 seconds
+    staleTime: 30000,
     refetchOnWindowFocus: false,
   });
 
   return {
-    isVerified: data?.isVerified ?? false,
-    verifiedAt: data?.verifiedAt ? new Date(data.verifiedAt) : null,
-    goodDollarAddress: data?.goodDollarAddress ?? null,
-    aiPromptsUsed: data?.aiPromptsUsed ?? 0,
-    aiPromptsLimit: data?.aiPromptsLimit ?? 5,
-    aiPromptsRemaining: data?.aiPromptsRemaining ?? null,
-    isLoading,
-    refetch,
+    isVerified: query.data?.isVerified ?? false,
+    verifiedAt: query.data?.verifiedAt ? new Date(query.data.verifiedAt) : null,
+    goodDollarAddress: query.data?.goodDollarAddress ?? null,
+    expiresAt: query.data?.expiresAt ? new Date(query.data.expiresAt) : null,
+    aiPromptsUsed: query.data?.aiPromptsUsed ?? 0,
+    aiPromptsLimit: query.data?.aiPromptsLimit ?? 5,
+    aiPromptsRemaining: query.data?.aiPromptsRemaining ?? null,
+    isExpiringSoon: query.data?.isExpiringSoon ?? false,
+    isLoading: query.isLoading,
+    error: query.error,
+    refetch: query.refetch,
   };
 }

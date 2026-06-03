@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils';
 import { useUserStore } from '@/stores/useUserStore';
 import { useGoodDollarVerification } from '@/hooks/useGoodDollarVerification';
 import VerificationStatusBadge from '@/components/VerificationStatusBadge';
+import confetti from 'canvas-confetti';
 
 const navItems = [
   { href: '/feed', label: 'Swipe', icon: Zap, color: 'text-green-400' },
@@ -39,6 +40,11 @@ const navItems = [
 
 function CelebrationModal({ onClose }: { onClose: () => void }) {
   useEffect(() => {
+    confetti({
+      particleCount: 150,
+      spread: 85,
+      origin: { y: 0.6 }
+    });
     const timer = setTimeout(onClose, 6000);
     return () => clearTimeout(timer);
   }, [onClose]);
@@ -144,7 +150,7 @@ export default function Navbar() {
   const searchParams = useSearchParams();
   const { authenticated, user, logout, login } = usePrivy();
   const { user: storeUser } = useUserStore();
-  const { isVerified, verifiedAt } = useGoodDollarVerification();
+  const { isVerified, verifiedAt, expiresAt, isExpiringSoon } = useGoodDollarVerification();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const isAdmin = storeUser?.role === 'ADMIN';
@@ -235,6 +241,9 @@ export default function Navbar() {
               <VerificationStatusBadge
                 isVerified={isVerified}
                 verifiedAt={verifiedAt}
+                expiresAt={expiresAt}
+                isExpiringSoon={isExpiringSoon}
+                onVerifyClick={() => router.push('/settings')}
               />
             </div>
           )}
@@ -327,7 +336,12 @@ export default function Navbar() {
                     <VerificationStatusBadge
                       isVerified={isVerified}
                       verifiedAt={verifiedAt}
-                      compact
+                      expiresAt={expiresAt}
+                      isExpiringSoon={isExpiringSoon}
+                      onVerifyClick={() => {
+                        setMobileMenuOpen(false);
+                        router.push('/settings');
+                      }}
                     />
                   )}
                   <button

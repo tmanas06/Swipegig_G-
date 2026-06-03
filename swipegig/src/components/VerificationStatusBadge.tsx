@@ -1,57 +1,70 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import { Shield, AlertTriangle } from 'lucide-react';
 
 interface VerificationStatusBadgeProps {
   isVerified: boolean;
   verifiedAt?: Date | null;
-  compact?: boolean;
+  expiresAt?: Date | null;
+  isExpiringSoon?: boolean;
+  onVerifyClick: () => void;
 }
 
 export default function VerificationStatusBadge({
   isVerified,
   verifiedAt,
-  compact = false,
+  expiresAt,
+  isExpiringSoon = false,
+  onVerifyClick,
 }: VerificationStatusBadgeProps) {
-  const router = useRouter();
+
+  const formatDate = (date: Date | null | undefined) => {
+    if (!date) return '';
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
 
   if (isVerified) {
-    const formattedDate = verifiedAt
-      ? verifiedAt.toLocaleDateString('en-US', {
-          year: 'numeric',
-          month: 'short',
-          day: 'numeric',
-        })
-      : null;
+    if (isExpiringSoon) {
+      // Verified + expiring soon (< 14 days)
+      return (
+        <div
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-xs text-amber-400 font-semibold cursor-default select-none"
+          title={`Expires ${formatDate(expiresAt)} · Re-verify at GoodWallet`}
+        >
+          <AlertTriangle className="w-3.5 h-3.5" />
+          <span>⚠ Re-verify Soon</span>
+        </div>
+      );
+    }
 
+    // Verified + not expiring soon
     return (
       <div
-        className="group relative flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500/10 border border-green-500/20 cursor-default"
-        title={formattedDate ? `Verified on ${formattedDate} · Sybil-resistant identity` : 'GoodDollar Verified'}
+        className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500/10 border border-green-500/20 text-xs text-green-400 font-semibold cursor-default select-none"
+        title={verifiedAt ? `Verified ${formatDate(verifiedAt)}` : 'Verified'}
       >
-        <Shield className="w-3.5 h-3.5 text-green-400" />
-        {!compact && (
-          <span className="text-xs text-green-400 font-medium whitespace-nowrap">
-            GoodDollar Verified
-          </span>
-        )}
+        <Shield className="w-3.5 h-3.5" />
+        <span>✓ GoodDollar Verified</span>
       </div>
     );
   }
 
+  // Not verified
   return (
     <button
-      onClick={() => router.push('/settings')}
-      className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/15 transition-colors cursor-pointer"
+      onClick={(e) => {
+        e.stopPropagation();
+        onVerifyClick();
+      }}
+      className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/15 text-xs text-amber-400 font-semibold transition-colors cursor-pointer"
       title="Complete GoodDollar face verification to unlock rewards & wallet"
     >
-      <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-      {!compact && (
-        <span className="text-xs text-amber-400 font-medium whitespace-nowrap">
-          Verify Identity
-        </span>
-      )}
+      <AlertTriangle className="w-3.5 h-3.5 animate-pulse" />
+      <span>⚠ Verify Identity</span>
     </button>
   );
 }

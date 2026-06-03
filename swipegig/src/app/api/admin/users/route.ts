@@ -42,6 +42,8 @@ export async function GET(request: NextRequest) {
           walletAddress: true,
           role: true,
           isVerified: true,
+          isGoodDollarVerified: true,
+          goodDollarAddress: true,
           profileScore: true,
           loginStreak: true,
           lastLoginAt: true,
@@ -97,6 +99,15 @@ export async function PATCH(request: NextRequest) {
     }
     if (typeof isVerified === 'boolean') {
       updateData.isVerified = isVerified;
+      updateData.isGoodDollarVerified = isVerified;
+      if (isVerified) {
+        updateData.goodDollarVerifiedAt = new Date();
+        updateData.aiPromptsLimit = 999999;
+      } else {
+        updateData.goodDollarVerifiedAt = null;
+        updateData.aiPromptsLimit = 5;
+        updateData.aiPromptsUsed = 0;
+      }
     }
 
     if (Object.keys(updateData).length === 0) {
@@ -115,6 +126,8 @@ export async function PATCH(request: NextRequest) {
         name: true,
         role: true,
         isVerified: true,
+        isGoodDollarVerified: true,
+        goodDollarAddress: true,
       },
     });
 

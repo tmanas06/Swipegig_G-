@@ -39,19 +39,27 @@ export default function SettingsPage() {
     isVerified: gdVerified,
     verifiedAt: gdVerifiedAt,
     goodDollarAddress,
+    expiresAt,
+    isExpiringSoon,
     aiPromptsUsed,
     aiPromptsLimit,
     aiPromptsRemaining,
     isLoading: gdLoading,
-    refetch: refetchGdStatus,
   } = useGoodDollarVerification();
   const {
-    checkStatus,
-    isChecking,
-    result: checkResult,
-    message: checkMessage,
+    mutate: checkStatus,
+    isPending: isChecking,
+    data: checkData,
     error: checkError,
   } = useCheckGoodDollarStatus();
+
+  const [addressInput, setAddressInput] = useState('');
+  const [addressError, setAddressError] = useState<string | null>(null);
+  const [verifyStep, setVerifyStep] = useState<'idle' | 'verifying'>('idle');
+  const [showReVerify, setShowReVerify] = useState(false);
+
+  const checkResult = checkData ? (checkData.verified ? 'verified' : (checkData.reason as 'not_verified' | 'expired')) : null;
+  const checkMessage = checkData?.message || null;
 
   const [visibility, setVisibility] = useState<'PUBLIC' | 'RECRUITERS_ONLY' | 'PRIVATE'>('PUBLIC');
   const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
@@ -219,12 +227,28 @@ export default function SettingsPage() {
   };
 
   const handleCheckVerification = () => {
-    const walletAddress = privyUser?.wallet?.address;
-    if (walletAddress) {
-      checkStatus(walletAddress);
-    } else {
-      toast.error('Connect a wallet first to check verification.');
+    setAddressError(null);
+    const trimmed = addressInput.trim();
+    if (!trimmed) {
+      setAddressError('Please enter a wallet address.');
+      return;
     }
+    if (!/^0x[a-fA-F0-9]{40}$/.test(trimmed)) {
+      setAddressError('Please enter a valid wallet address (0x...)');
+      return;
+    }
+    checkStatus(trimmed, {
+      onSuccess: (data) => {
+        if (data.verified) {
+          toast.success('Successfully verified with GoodDollar!');
+          setAddressInput('');
+          setVerifyStep('idle');
+          setShowReVerify(false);
+        } else {
+          toast.error(data.message || 'Verification check failed.');
+        }
+      }
+    });
   };
 
   return (
@@ -254,153 +278,207 @@ export default function SettingsPage() {
                   <Loader2 className="w-5 h-5 animate-spin text-primary" />
                   <span className="text-sm text-muted-foreground">Checking verification status...</span>
                 </div>
-              ) : gdVerified ? (
-                /* Verified State */
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3 px-4 py-4 rounded-xl bg-green-500/10 border border-green-500/20">
-                    <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center shrink-0">
-                      <CheckCircle className="w-5 h-5 text-green-400" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-green-400">GoodDollar Verified Human ✓</p>
-                      {gdVerifiedAt && (
-                        <p className="text-xs text-green-400/60 mt-0.5">
-                          Verified on {gdVerifiedAt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div className="glass rounded-xl px-4 py-3">
-                      <p className="text-xs text-muted-foreground mb-1">Wallet</p>
-                      <p className="font-mono text-xs truncate">
-                        {goodDollarAddress ? `${goodDollarAddress.slice(0, 8)}...${goodDollarAddress.slice(-6)}` : '—'}
-                      </p>
-                    </div>
-                    <div className="glass rounded-xl px-4 py-3">
-                      <p className="text-xs text-muted-foreground mb-1">AI Coaching</p>
-                      <p className="text-xs font-semibold text-green-400">Unlimited ∞</p>
-                    </div>
-                  </div>
-                </div>
               ) : (
-                /* Unverified State */
                 <div className="space-y-4">
-                  <div className="text-center py-4">
-                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-green-500/20 to-emerald-500/20 border border-green-500/30 flex items-center justify-center mx-auto mb-4">
-                      <span className="text-2xl">🌍</span>
-                    </div>
-                    <h3 className="font-bold text-base mb-2">Verify with GoodDollar</h3>
-                    <p className="text-xs text-muted-foreground max-w-sm mx-auto leading-relaxed mb-4">
-                      Complete a quick face verification to prove you&apos;re a unique human.
-                      Unlock G$ rewards, wallet access, unlimited AI coaching, and more.
-                    </p>
-
-                    <div className="space-y-3 text-left mb-6 max-w-xs mx-auto">
-                      {[
-                        'G$ wallet and token rewards',
-                        'Unlimited AI career coaching',
-                        'Job Seekers Pool access',
-                        'Creator marketplace',
-                      ].map((item) => (
-                        <div key={item} className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <div className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />
-                          {item}
+                  {gdVerified ? (
+                    /* Verified State */
+                    <div className="space-y-4">
+                      {isExpiringSoon ? (
+                        <div className="flex items-start gap-3 px-4 py-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-sm">
+                          <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="font-semibold">Re-verify Soon</p>
+                            <p className="text-xs text-amber-400/80 mt-0.5">
+                              Your verification expires on {expiresAt?.toLocaleDateString()}
+                            </p>
+                          </div>
                         </div>
-                      ))}
-                    </div>
-
-                    <button
-                      onClick={() => window.open(GOODDOLLAR_WALLET_URL, '_blank')}
-                      className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 text-white font-semibold text-sm hover:shadow-lg hover:shadow-green-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
-                    >
-                      Verify with GoodDollar
-                      <ExternalLink className="w-4 h-4" />
-                    </button>
-
-                    <p className="text-[11px] text-muted-foreground/50 mt-2">
-                      Takes ~2 minutes · Free forever
-                    </p>
-                  </div>
-
-                  <div className="border-t border-border pt-4">
-                    <button
-                      onClick={handleCheckVerification}
-                      disabled={isChecking || !privyUser?.wallet?.address}
-                      className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-white/10 hover:bg-white/5 text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-                    >
-                      {isChecking ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Checking on-chain status...
-                        </>
                       ) : (
-                        <>
-                          <Shield className="w-4 h-4" />
-                          Check My Verification Status
-                        </>
+                        <div className="flex items-center gap-3 px-4 py-4 rounded-xl bg-green-500/10 border border-green-500/20">
+                          <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center shrink-0">
+                            <CheckCircle className="w-5 h-5 text-green-400" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-green-400">GoodDollar Verified Human ✓</p>
+                            {gdVerifiedAt && (
+                              <p className="text-xs text-green-400/60 mt-0.5">
+                                Verified on {gdVerifiedAt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                              </p>
+                            )}
+                          </div>
+                        </div>
                       )}
-                    </button>
 
-                    {/* Check Result Feedback */}
-                    {checkResult === 'verified' && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="flex items-center gap-2 mt-3 px-4 py-3 rounded-xl bg-green-500/10 border border-green-500/20 text-green-400 text-sm"
-                      >
-                        <CheckCircle className="w-5 h-5 shrink-0" />
-                        <span className="font-medium">Verified! Unlocking features...</span>
-                      </motion.div>
-                    )}
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div className="glass rounded-xl px-4 py-3">
+                          <p className="text-xs text-muted-foreground mb-1">Wallet</p>
+                          <p className="font-mono text-xs truncate">
+                            {goodDollarAddress ? `${goodDollarAddress.slice(0, 8)}...${goodDollarAddress.slice(-6)}` : '—'}
+                          </p>
+                        </div>
+                        <div className="glass rounded-xl px-4 py-3">
+                          <p className="text-xs text-muted-foreground mb-1">AI Coaching</p>
+                          <p className="text-xs font-semibold text-green-400">Unlimited ∞</p>
+                        </div>
+                      </div>
 
-                    {checkResult === 'not_verified' && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="flex items-start gap-2 mt-3 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-sm"
-                      >
-                        <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
-                        <span>{checkMessage}</span>
-                      </motion.div>
-                    )}
-
-                    {checkResult === 'expired' && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="flex items-start gap-2 mt-3 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-sm"
-                      >
-                        <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
-                        <span>{checkMessage}</span>
-                      </motion.div>
-                    )}
-
-                    {checkError && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="flex items-start gap-2 mt-3 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm"
-                      >
-                        <XCircle className="w-5 h-5 shrink-0 mt-0.5" />
-                        <span>{checkError}</span>
-                      </motion.div>
-                    )}
-
-                    {!privyUser?.wallet?.address && (
-                      <p className="text-xs text-muted-foreground mt-2 text-center">
-                        Connect a wallet first to check your status.
-                      </p>
-                    )}
-
-                    {/* AI prompt status */}
-                    <div className="mt-4 flex items-center justify-center gap-2 text-xs text-muted-foreground">
-                      <Eye className="w-3.5 h-3.5" />
-                      <span>
-                        AI Coach: {aiPromptsRemaining !== null ? `${aiPromptsRemaining} of ${aiPromptsLimit} free prompts left` : 'Unlimited'}
-                      </span>
+                      {!showReVerify && (
+                        <button
+                          onClick={() => {
+                            setVerifyStep('idle');
+                            setShowReVerify(true);
+                          }}
+                          className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-white/10 hover:bg-white/5 text-sm font-medium transition-all cursor-pointer"
+                        >
+                          {isExpiringSoon ? 'Re-verify with GoodWallet' : 'Update GoodWallet Address'}
+                        </button>
+                      )}
                     </div>
+                  ) : (
+                    /* Unverified / Expired State */
+                    <div className="space-y-4">
+                      <div className="text-center py-4">
+                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-green-500/20 to-emerald-500/20 border border-green-500/30 flex items-center justify-center mx-auto mb-4">
+                          <span className="text-2xl">🌍</span>
+                        </div>
+                        <h3 className="font-bold text-base mb-2">
+                          {expiresAt ? 'GoodDollar Verification Expired' : 'Verify with GoodDollar'}
+                        </h3>
+                        <p className="text-xs text-muted-foreground max-w-sm mx-auto leading-relaxed mb-4">
+                          {expiresAt 
+                            ? 'Your face verification has expired. Please complete re-verification in GoodWallet and submit your address below.'
+                            : 'Complete a quick face verification to prove you\'re a unique human. Unlock G$ rewards, wallet access, unlimited AI coaching, and more.'
+                          }
+                        </p>
+
+                        <div className="space-y-3 text-left mb-6 max-w-xs mx-auto">
+                          {[
+                            'G$ wallet and token rewards',
+                            'Unlimited AI career coaching',
+                            'Job Seekers Pool access',
+                            'Creator marketplace',
+                          ].map((item) => (
+                            <div key={item} className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <div className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />
+                              {item}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Step 1 & Step 2 verification input (visible when unverified, expired, or updating address) */}
+                  {(!gdVerified || showReVerify) && (
+                    <div className="border-t border-border pt-6 space-y-5">
+                      {gdVerified && (
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-semibold text-white">Update/Re-verify Identity</p>
+                          <button
+                            onClick={() => setShowReVerify(false)}
+                            className="text-xs text-muted-foreground hover:text-white underline cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Step 1 */}
+                      <div className="text-left w-full">
+                        <p className="text-xs uppercase tracking-wider text-gray-500 font-bold mb-2">── Step 1 ──</p>
+                        <p className="text-sm text-white mb-3">Complete face verification in GoodWallet</p>
+                        <button
+                          onClick={() => {
+                            window.open(GOODDOLLAR_WALLET_URL, '_blank');
+                            setVerifyStep('verifying');
+                          }}
+                          className="w-full inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl border border-green-500/30 hover:border-green-500/50 hover:bg-green-500/5 text-green-400 font-semibold text-sm transition-all cursor-pointer"
+                        >
+                          Open GoodWallet →
+                        </button>
+                      </div>
+
+                      {/* Step 2 */}
+                      {verifyStep === 'verifying' && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          className="text-left w-full space-y-3 pt-2"
+                        >
+                          <p className="text-xs uppercase tracking-wider text-gray-500 font-bold mb-1">── Step 2 ──</p>
+                          <label htmlFor="settings-address-input" className="block text-sm text-white font-medium">
+                            Enter your GoodWallet address
+                          </label>
+                          <input
+                            id="settings-address-input"
+                            type="text"
+                            placeholder="0x..."
+                            value={addressInput}
+                            onChange={(e) => {
+                              setAddressInput(e.target.value);
+                              if (addressError) setAddressError(null);
+                            }}
+                            className={`w-full glass rounded-xl px-4 py-3 text-sm font-mono text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-green-500/30 ${
+                              addressError || checkResult === 'not_verified'
+                                ? 'border border-red-500/40 focus:ring-red-500/20'
+                                : checkResult === 'expired'
+                                ? 'border border-amber-500/40 focus:ring-amber-500/20'
+                                : 'border border-white/10'
+                            }`}
+                            autoComplete="off"
+                            autoCorrect="off"
+                            autoCapitalize="off"
+                            spellCheck={false}
+                          />
+                          <p className="text-[11px] text-gray-500">
+                            Find this: GoodWallet → Settings → My Address
+                          </p>
+
+                          <button
+                            onClick={handleCheckVerification}
+                            disabled={!addressInput.trim() || isChecking}
+                            className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 text-white font-semibold text-sm hover:shadow-lg hover:shadow-green-500/20 disabled:opacity-40 disabled:hover:shadow-none disabled:cursor-not-allowed transition-all cursor-pointer"
+                          >
+                            {isChecking ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Checking Verification...
+                              </>
+                            ) : (
+                              <>
+                                <Shield className="w-4 h-4" />
+                                Check My Verification
+                              </>
+                            )}
+                          </button>
+
+                          {/* Error/Result Feedbacks */}
+                          {addressError && (
+                            <p className="text-xs text-red-500 mt-1.5">{addressError}</p>
+                          )}
+
+                          {checkResult === 'not_verified' && checkMessage && (
+                            <p className="text-xs text-red-500 mt-1.5 leading-relaxed">{checkMessage}</p>
+                          )}
+
+                          {checkResult === 'expired' && checkMessage && (
+                            <p className="text-xs text-amber-500 mt-1.5 leading-relaxed">{checkMessage}</p>
+                          )}
+
+                          {checkError && (
+                            <p className="text-xs text-red-500 mt-1.5 leading-relaxed">{checkError.message}</p>
+                          )}
+                        </motion.div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* AI prompt status */}
+                  <div className="mt-4 flex items-center justify-center gap-2 text-xs text-muted-foreground pt-2 border-t border-white/5">
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>
+                      AI Coach: {aiPromptsRemaining !== null ? `${aiPromptsRemaining} of ${aiPromptsLimit} free prompts left` : 'Unlimited'}
+                    </span>
                   </div>
                 </div>
               )}

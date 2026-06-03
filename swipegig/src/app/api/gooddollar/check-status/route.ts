@@ -1,148 +1,180 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isAddress } from 'viem';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { checkGoodDollarVerification } from '@/lib/gooddollar/identity';
-import { VERIFIED_AI_PROMPTS_LIMIT } from '@/lib/gooddollar/constants';
+import { checkGoodDollarVerification, isValidEthAddress } from '@/lib/gooddollar/identity';
+import { Prisma } from '@prisma/client';
 
 const checkStatusSchema = z.object({
-  walletAddress: z.string().refine(
-    (val) => isAddress(val),
-    { message: 'Invalid Ethereum address' }
-  ),
+  goodWalletAddress: z.string().min(1),
 });
 
 export async function POST(request: NextRequest) {
   try {
-    // Get privy user ID from header
+    // 1. Get Privy User ID from session header
     const privyUserId = request.headers.get('x-privy-user-id');
     if (!privyUserId) {
       return NextResponse.json(
-        { error: 'Unauthorized', message: 'Please sign in first.' },
+        { error: 'Unauthorized', message: 'Redirect to login' },
         { status: 401 }
       );
     }
 
-    // Validate request body
+    // 2. Parse + validate request body
     const body = await request.json();
     const parsed = checkStatusSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: 'Invalid request', message: parsed.error.errors[0]?.message || 'Invalid wallet address' },
+        { error: 'Invalid request', message: 'Please enter a valid wallet address (0x...)' },
         { status: 400 }
       );
     }
 
-    const { walletAddress } = parsed.data;
+    const { goodWalletAddress } = parsed.data;
 
-    // Find user in DB
+    // Validate Ethereum address format
+    if (!isValidEthAddress(goodWalletAddress)) {
+      return NextResponse.json(
+        { error: 'Invalid address format', message: 'Please enter a valid wallet address (0x...)' },
+        { status: 400 }
+      );
+    }
+
+    // Find current user in DB
     const user = await prisma.user.findUnique({
       where: { privyId: privyUserId },
       select: {
         id: true,
-        isGoodDollarVerified: true,
-        goodDollarVerifiedAt: true,
-        updatedAt: true,
       },
     });
 
     if (!user) {
       return NextResponse.json(
-        { error: 'User not found', message: 'Account not found. Please sign in again.' },
-        { status: 404 }
+        { error: 'User not found', message: 'Redirect to login' },
+        { status: 401 }
       );
     }
 
-    // Simple rate limiting: check if last update was within 6 seconds
-    const timeSinceLastUpdate = Date.now() - new Date(user.updatedAt).getTime();
-    if (timeSinceLastUpdate < 6000) {
+    // 3. Rate limit check: Prune logs older than 24 hours and count checks in the last hour
+    const limitWindowStart = new Date(Date.now() - 60 * 60 * 1000); // 1 hour ago
+    const pruneThreshold = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 hours ago
+
+    const [_, checkCount] = await prisma.$transaction([
+      prisma.verificationCheckLog.deleteMany({
+        where: {
+          userId: user.id,
+          checkedAt: { lt: pruneThreshold },
+        },
+      }),
+      prisma.verificationCheckLog.count({
+        where: {
+          userId: user.id,
+          checkedAt: { gte: limitWindowStart },
+        },
+      }),
+    ]);
+
+    if (checkCount >= 10) {
       return NextResponse.json(
         {
           error: 'Rate limited',
-          message: 'Please wait a moment before checking again.',
-          verified: user.isGoodDollarVerified,
+          message: 'Too many attempts. Wait 60 seconds and try again.',
         },
         { status: 429 }
       );
     }
 
-    // Check on-chain verification status
-    const verification = await checkGoodDollarVerification(walletAddress);
+    // Record the current check attempt in the rate limit logs
+    await prisma.verificationCheckLog.create({
+      data: {
+        userId: user.id,
+      },
+    });
 
-    if (verification.isWhitelisted && !verification.isExpired) {
-      // Verified! Update DB
-      await prisma.user.update({
-        where: { privyId: privyUserId },
-        data: {
-          isGoodDollarVerified: true,
-          isVerified: true, // Also set legacy verified flag
-          goodDollarVerifiedAt: new Date(),
-          goodDollarAddress: walletAddress,
-          lastAuthenticatedAt: verification.lastAuthenticated > 0
-            ? new Date(verification.lastAuthenticated * 1000)
-            : null,
-          aiPromptsLimit: VERIFIED_AI_PROMPTS_LIMIT,
-        },
-      });
+    // 4. Query GoodDollar contract status on Celo
+    let verification;
+    try {
+      verification = await checkGoodDollarVerification(goodWalletAddress);
+    } catch (contractError) {
+      console.error('[GOODDOLLAR_RPC_ERROR]', contractError);
+      return NextResponse.json(
+        { error: 'RPC call fails', message: 'Could not reach GoodDollar network. Try again in a moment.' },
+        { status: 503 }
+      );
+    }
+
+    const { isWhitelisted, lastAuthenticated, isExpired, expiresAt } = verification;
+
+    // 5. Whitelisted & Not Expired -> Verify User
+    if (isWhitelisted && !isExpired) {
+      try {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            isGoodDollarVerified: true,
+            isVerified: true, // legacy badge/score trigger
+            goodDollarVerifiedAt: new Date(),
+            goodDollarAddress: goodWalletAddress,
+            lastAuthenticatedAt: lastAuthenticated > 0
+              ? new Date(lastAuthenticated * 1000)
+              : null,
+            verificationExpiredAt: expiresAt ? new Date(expiresAt * 1000) : null,
+            aiPromptsLimit: 999999,
+          },
+        });
+      } catch (dbError) {
+        // Handle unique constraint error: goodDollarAddress must be unique
+        if (dbError instanceof Prisma.PrismaClientKnownRequestError && dbError.code === 'P2002') {
+          return NextResponse.json(
+            {
+              error: 'Already linked',
+              message: 'This GoodWallet address is already linked to another SwipeGig account.',
+            },
+            { status: 400 }
+          );
+        }
+        throw dbError;
+      }
 
       return NextResponse.json({
         verified: true,
-        lastAuthenticated: verification.lastAuthenticated,
-        message: 'You are GoodDollar verified! All features are now unlocked.',
+        goodDollarAddress: goodWalletAddress,
+        lastAuthenticated,
+        expiresAt,
       });
     }
 
-    if (verification.isWhitelisted && verification.isExpired) {
-      // Verification expired
+    // 6. Whitelisted & Expired
+    if (isWhitelisted && isExpired) {
       await prisma.user.update({
-        where: { privyId: privyUserId },
+        where: { id: user.id },
         data: {
           isGoodDollarVerified: false,
-          lastAuthenticatedAt: verification.lastAuthenticated > 0
-            ? new Date(verification.lastAuthenticated * 1000)
+          goodDollarAddress: goodWalletAddress, // store it anyway
+          lastAuthenticatedAt: lastAuthenticated > 0
+            ? new Date(lastAuthenticated * 1000)
             : null,
+          verificationExpiredAt: expiresAt ? new Date(expiresAt * 1000) : null,
         },
       });
 
       return NextResponse.json({
         verified: false,
         reason: 'expired',
-        message: 'Your GoodDollar verification has expired. Please re-verify at wallet.gooddollar.org',
+        message: 'Your GoodDollar verification has expired. Please re-verify at wallet.gooddollar.org to continue.',
+        expiresAt,
       });
     }
 
-    // Not whitelisted
+    // 7. Not Whitelisted
     return NextResponse.json({
       verified: false,
       reason: 'not_verified',
-      message: 'No verification found. Complete face verification at wallet.gooddollar.org first.',
+      message: 'No face verification found for this address. Make sure you completed verification in GoodWallet and entered the correct address.',
     });
   } catch (error: unknown) {
-    console.error('[GOODDOLLAR_CHECK_STATUS]', error);
-
-    // Check if it's a network/RPC error
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    const isNetworkError =
-      errorMessage.includes('fetch') ||
-      errorMessage.includes('network') ||
-      errorMessage.includes('timeout') ||
-      errorMessage.includes('ECONNREFUSED');
-
-    if (isNetworkError) {
-      return NextResponse.json(
-        {
-          error: 'Network error',
-          message: 'Could not reach the GoodDollar network. Please try again in a moment.',
-        },
-        { status: 503 }
-      );
-    }
-
+    console.error('[GOODDOLLAR_CHECK_STATUS_ROUTE_ERROR]', error);
     return NextResponse.json(
-      {
-        error: 'Server error',
-        message: 'Something went wrong. Please try again.',
-      },
+      { error: 'Server error', message: 'Something went wrong. Please try again.' },
       { status: 500 }
     );
   }

@@ -89,13 +89,17 @@ export async function syncJobsFromAPIs(): Promise<{ success: boolean; totalSynce
       const jobsToSync = rawJobs.slice(0, 50);
       totalSynced += jobsToSync.length;
 
+      const externalIds = jobsToSync.map(rawJob => `remotive-${rawJob.id}`);
+      const existingJobs = await prisma.job.findMany({
+        where: { externalId: { in: externalIds } },
+        select: { externalId: true }
+      });
+      const existingIds = new Set(existingJobs.map(j => j.externalId));
+
+      const newJobsData = [];
       for (const rawJob of jobsToSync) {
         const externalId = `remotive-${rawJob.id}`;
-        const existing = await prisma.job.findUnique({
-          where: { externalId },
-        });
-
-        if (existing) continue;
+        if (existingIds.has(externalId)) continue;
 
         const isWeb3 = checkIfWeb3(rawJob.title, rawJob.description, rawJob.tags || []);
         const salaryInfo = parseSalary(rawJob.salary);
@@ -104,28 +108,32 @@ export async function syncJobsFromAPIs(): Promise<{ success: boolean; totalSynce
           .map(t => t.trim())
           .filter(t => t.length > 0 && t.length < 30);
 
-        await prisma.job.create({
-          data: {
-            externalId,
-            title: rawJob.title,
-            company: rawJob.company_name,
-            companyLogo: rawJob.company_logo || null,
-            description: rawJob.description,
-            skills,
-            salaryMin: salaryInfo.min,
-            salaryMax: salaryInfo.max,
-            salaryCurrency: salaryInfo.currency,
-            location: rawJob.candidate_required_location || 'Remote',
-            type,
-            mode: 'REMOTE',
-            source: 'REMOTIVE',
-            sourceUrl: rawJob.url,
-            isWeb3,
-            experienceLevel: rawJob.tags?.some(t => t.toLowerCase().includes('senior')) ? 'Senior' : 'Mid',
-            postedAt: new Date(rawJob.publication_date),
-          },
+        newJobsData.push({
+          externalId,
+          title: rawJob.title,
+          company: rawJob.company_name,
+          companyLogo: rawJob.company_logo || null,
+          description: rawJob.description,
+          skills,
+          salaryMin: salaryInfo.min,
+          salaryMax: salaryInfo.max,
+          salaryCurrency: salaryInfo.currency,
+          location: rawJob.candidate_required_location || 'Remote',
+          type,
+          mode: 'REMOTE' as const,
+          source: 'REMOTIVE' as const,
+          sourceUrl: rawJob.url,
+          isWeb3,
+          experienceLevel: rawJob.tags?.some(t => t.toLowerCase().includes('senior')) ? 'Senior' : 'Mid',
+          postedAt: new Date(rawJob.publication_date),
         });
-        newJobsCount++;
+      }
+
+      if (newJobsData.length > 0) {
+        await prisma.job.createMany({
+          data: newJobsData,
+        });
+        newJobsCount += newJobsData.length;
       }
     } else {
       errors.push(`Remotive status: ${response.status}`);
@@ -169,13 +177,17 @@ export async function syncJobsFromAPIs(): Promise<{ success: boolean; totalSynce
       const jobsToSync = devJobs.slice(0, 50);
       totalSynced += jobsToSync.length;
 
+      const externalIds = jobsToSync.map(rawJob => `arbeitnow-${rawJob.slug}`);
+      const existingJobs = await prisma.job.findMany({
+        where: { externalId: { in: externalIds } },
+        select: { externalId: true }
+      });
+      const existingIds = new Set(existingJobs.map(j => j.externalId));
+
+      const newJobsData = [];
       for (const rawJob of jobsToSync) {
         const externalId = `arbeitnow-${rawJob.slug}`;
-        const existing = await prisma.job.findUnique({
-          where: { externalId },
-        });
-
-        if (existing) continue;
+        if (existingIds.has(externalId)) continue;
 
         const isWeb3 = checkIfWeb3(rawJob.title, rawJob.description, rawJob.tags || []);
         const type = parseJobType(rawJob.job_types?.[0] || 'full-time');
@@ -183,28 +195,32 @@ export async function syncJobsFromAPIs(): Promise<{ success: boolean; totalSynce
           .map((t: string) => t.trim())
           .filter((t: string) => t.length > 0 && t.length < 30);
 
-        await prisma.job.create({
-          data: {
-            externalId,
-            title: rawJob.title,
-            company: rawJob.company_name,
-            companyLogo: null,
-            description: rawJob.description,
-            skills,
-            salaryMin: null,
-            salaryMax: null,
-            salaryCurrency: 'USD',
-            location: rawJob.location || 'Remote',
-            type,
-            mode: rawJob.remote ? 'REMOTE' : 'HYBRID',
-            source: 'WELLFOUND', // Map to pre-defined Enum
-            sourceUrl: rawJob.url,
-            isWeb3,
-            experienceLevel: rawJob.tags?.some((t: string) => t.toLowerCase().includes('senior')) ? 'Senior' : 'Mid',
-            postedAt: rawJob.created_at ? new Date(rawJob.created_at) : new Date(),
-          },
+        newJobsData.push({
+          externalId,
+          title: rawJob.title,
+          company: rawJob.company_name,
+          companyLogo: null,
+          description: rawJob.description,
+          skills,
+          salaryMin: null,
+          salaryMax: null,
+          salaryCurrency: 'USD',
+          location: rawJob.location || 'Remote',
+          type,
+          mode: rawJob.remote ? 'REMOTE' as const : 'HYBRID' as const,
+          source: 'WELLFOUND' as const, // Map to pre-defined Enum
+          sourceUrl: rawJob.url,
+          isWeb3,
+          experienceLevel: rawJob.tags?.some((t: string) => t.toLowerCase().includes('senior')) ? 'Senior' : 'Mid',
+          postedAt: rawJob.created_at ? new Date(rawJob.created_at) : new Date(),
         });
-        newJobsCount++;
+      }
+
+      if (newJobsData.length > 0) {
+        await prisma.job.createMany({
+          data: newJobsData,
+        });
+        newJobsCount += newJobsData.length;
       }
     } else {
       errors.push(`Arbeitnow status: ${response.status}`);

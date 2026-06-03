@@ -111,15 +111,20 @@ export async function GET(request: NextRequest) {
 
     if (shouldSync) {
       console.log(`[JOBS_API] Running sync. Total jobs in DB: ${totalCount}. Stale: ${isStale}.`);
-      const syncResult = await syncJobsFromAPIs();
-      
-      const count = await prisma.job.count();
-      // Fallback to high-quality Web3 seed jobs if database is completely empty and sync failed
-      if (count === 0 && (!syncResult.success || syncResult.newJobs === 0)) {
-        console.log('[JOBS_API] Live sync failed and database is empty. Falling back to default Web3 seed jobs...');
-        await prisma.job.createMany({
-          data: SEED_JOBS,
-        });
+      if (totalCount === 0) {
+        const syncResult = await syncJobsFromAPIs();
+        const count = await prisma.job.count();
+        if (count === 0 && (!syncResult.success || syncResult.newJobs === 0)) {
+          console.log('[JOBS_API] Live sync failed and database is empty. Falling back to default Web3 seed jobs...');
+          await prisma.job.createMany({
+            data: SEED_JOBS,
+          });
+        }
+      } else {
+        // Trigger background sync so the HTTP request completes immediately
+        syncJobsFromAPIs()
+          .then((res) => console.log('[JOBS_API] Background sync completed:', res))
+          .catch((err) => console.error('[JOBS_API] Background sync failed:', err));
       }
     }
     const { searchParams } = new URL(request.url);

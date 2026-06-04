@@ -89,6 +89,19 @@ function formatJobLocation(mode: string, location: string): string {
   return `Remote (${cleanLoc})`;
 }
 
+function stripHtmlTags(html: string): string {
+  if (!html) return '';
+  return html
+    .replace(/<[^>]*>/g, '') // Strip HTML tags
+    .replace(/&nbsp;/g, ' ') // Replace non-breaking spaces
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/\s+/g, ' ') // Collapse multiple whitespace
+    .trim();
+}
+
 export default function FeedPage() {
   const { user } = useUserStore();
   const [jobs, setJobs] = useState<any[]>([]);
@@ -142,7 +155,17 @@ export default function FeedPage() {
 
         // Sort by match score
         processedJobs.sort((a: any, b: any) => (b.matchScore || 0) - (a.matchScore || 0));
-        setJobs(processedJobs);
+
+        // Deduplicate jobs by title + company (case-insensitive, trimmed)
+        const seen = new Set<string>();
+        const uniqueJobs = processedJobs.filter((job: any) => {
+          const key = `${job.title.toLowerCase().trim()}|${job.company.toLowerCase().trim()}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+
+        setJobs(uniqueJobs);
         setSwipedIndices(new Set()); // Reset card deck whenever query changes
       }
     } catch (error) {
@@ -567,7 +590,7 @@ export default function FeedPage() {
             <animated.div
               key={job.id}
               className={cn(
-                "absolute w-[340px] sm:w-[380px] will-change-transform touch-none",
+                "absolute w-[90vw] max-w-[350px] sm:max-w-[400px] md:max-w-[460px] lg:max-w-[500px] will-change-transform touch-none",
                 isSwiped && "pointer-events-none"
               )}
               style={{
@@ -579,7 +602,7 @@ export default function FeedPage() {
             >
               <animated.div
                 {...bind(i)}
-                className="glass rounded-3xl p-6 cursor-grab active:cursor-grabbing gradient-border select-none bg-background/80 backdrop-blur-md shadow-2xl"
+                className="glass rounded-3xl p-6 md:p-8 cursor-grab active:cursor-grabbing gradient-border select-none bg-background/80 backdrop-blur-md shadow-2xl"
                 style={{
                   transform: interpolate([rot, scale], transformCard),
                 }}
@@ -589,17 +612,17 @@ export default function FeedPage() {
                   <div className="flex items-center gap-3">
                     <div
                       className={cn(
-                        'w-12 h-12 rounded-xl bg-gradient-to-br flex items-center justify-center text-white font-bold text-lg shrink-0 shadow-inner',
+                        'w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gradient-to-br flex items-center justify-center text-white font-bold text-lg md:text-xl shrink-0 shadow-inner',
                         getCompanyColor(job.company)
                       )}
                     >
                       {getCompanyInitial(job.company)}
                     </div>
                     <div>
-                      <h3 className="font-bold text-lg leading-tight">{job.title}</h3>
+                      <h3 className="font-bold text-lg md:text-xl leading-tight">{job.title}</h3>
                       <div className="flex items-center gap-1.5 mt-1">
                         <Building2 className="w-3.5 h-3.5 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">{job.company}</span>
+                        <span className="text-sm md:text-base text-muted-foreground">{job.company}</span>
                       </div>
                     </div>
                   </div>
@@ -609,7 +632,7 @@ export default function FeedPage() {
                 {job.matchScore && (
                   <div
                     className={cn(
-                      'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold mb-4 border',
+                      'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs md:text-sm font-semibold mb-4 border',
                       getMatchBg(job.matchScore)
                     )}
                   >
@@ -621,8 +644,8 @@ export default function FeedPage() {
                 )}
 
                 {/* Description */}
-                <p className="text-sm text-muted-foreground leading-relaxed mb-4 line-clamp-3">
-                  {job.description}
+                <p className="text-sm md:text-base text-muted-foreground leading-relaxed mb-4 md:mb-6 line-clamp-3 md:line-clamp-4">
+                  {stripHtmlTags(job.description)}
                 </p>
 
                 {/* Skills */}
@@ -630,7 +653,7 @@ export default function FeedPage() {
                   {job.skills.slice(0, 5).map((skill: string) => (
                     <span
                       key={skill}
-                      className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-xs font-medium text-muted-foreground"
+                      className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-xs md:text-sm font-medium text-muted-foreground"
                     >
                       {skill}
                     </span>
@@ -638,7 +661,7 @@ export default function FeedPage() {
                 </div>
 
                 {/* Meta */}
-                <div className="flex items-center justify-between text-sm border-t border-border pt-4">
+                <div className="flex items-center justify-between text-xs md:text-sm border-t border-border pt-4 md:pt-6">
                   <div className="flex items-center gap-1.5 text-muted-foreground">
                     <DollarSign className="w-3.5 h-3.5" />
                     <span>

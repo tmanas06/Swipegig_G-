@@ -1,13 +1,24 @@
 import { NextResponse } from 'next/server';
-import { createPublicClient, http, formatEther } from 'viem';
-import { celoSepolia } from 'viem/chains';
+import { createPublicClient, http, formatEther, type Address } from 'viem';
+import { celo } from 'viem/chains';
 
-// GoodDollar token is not deployed on Celo Sepolia testnet, so we only fetch native CELO balance
 const FALLBACK_RPCS = [
-  'https://forno.celo-sepolia.celo-testnet.org',
-  'https://celo-sepolia.drpc.org',
-  'https://celo-sepolia-rpc.publicnode.com',
+  process.env.NEXT_PUBLIC_CELO_RPC_URL || 'https://forno.celo.org',
+  'https://rpc.ankr.com/celo',
+  'https://celo.drpc.org',
 ];
+
+const G_TOKEN_ADDRESS = (process.env.NEXT_PUBLIC_DEV_G_TOKEN || '0xFa51eFDc0910CCdA91732e6806912Fa12e2FD475') as Address;
+
+const ERC20_ABI = [
+  {
+    name: 'balanceOf',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: 'balance', type: 'uint256' }],
+  },
+] as const;
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -24,15 +35,27 @@ export async function GET(req: Request) {
   for (const rpcUrl of FALLBACK_RPCS) {
     try {
       const client = createPublicClient({
-        chain: celoSepolia,
+        chain: celo,
         transport: http(rpcUrl, { timeout: 8000 }),
       });
 
-      const balanceRaw = await client.getBalance({
-        address: address as `0x${string}`,
-      });
+      const [celoBalanceRaw, gdBalanceRaw] = await Promise.all([
+        client.getBalance({
+          address: address as Address,
+        }),
+        client.readContract({
+          address: G_TOKEN_ADDRESS,
+          abi: ERC20_ABI,
+          functionName: 'balanceOf',
+          args: [address as Address],
+        }).catch((err: any) => {
+          console.warn('[BALANCE] G$ token read failed, defaulting to 0:', err.message);
+          return BigInt(0);
+        }),
+      ]);
 
-      celoBalance = parseFloat(formatEther(balanceRaw)).toFixed(4);
+      celoBalance = parseFloat(formatEther(celoBalanceRaw)).toFixed(4);
+      gdBalance = parseFloat(formatEther(gdBalanceRaw)).toFixed(2);
       success = true;
       break;
     } catch (err) {
@@ -47,7 +70,7 @@ export async function GET(req: Request) {
   return NextResponse.json({
     celoBalance,
     gdBalance,
-    network: 'celo-sepolia',
+    network: 'celo',
     success,
   });
 }

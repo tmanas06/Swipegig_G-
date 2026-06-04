@@ -1,6 +1,6 @@
 import { createWalletClient, http, parseEther, createPublicClient } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { celoSepolia } from 'viem/chains';
+import { celo } from 'viem/chains';
 
 // ABI for mintWelcomeNFT
 const WELCOME_NFT_ABI = [
@@ -20,7 +20,7 @@ export async function onboardNewUser(userAddress: string) {
   // Read env variables dynamically at runtime when the function is called
   const PRIVATE_KEY = process.env.PRIVATE_KEY;
   const WELCOME_NFT_ADDRESS = process.env.WELCOME_NFT_CONTRACT_ADDRESS;
-  const RPC_URL = process.env.NEXT_PUBLIC_CELO_RPC_URL || 'https://forno.celo-sepolia.celo-testnet.org';
+  const RPC_URL = process.env.NEXT_PUBLIC_CELO_RPC_URL || 'https://forno.celo.org';
 
   if (!PRIVATE_KEY) {
     console.error('[ONBOARDING] No PRIVATE_KEY configured in environment');
@@ -42,12 +42,12 @@ export async function onboardNewUser(userAddress: string) {
     const account = privateKeyToAccount(formattedKey as `0x${string}`);
     const walletClient = createWalletClient({
       account,
-      chain: celoSepolia,
+      chain: celo,
       transport: http(RPC_URL),
     });
 
     const publicClient = createPublicClient({
-      chain: celoSepolia,
+      chain: celo,
       transport: http(RPC_URL),
     });
 

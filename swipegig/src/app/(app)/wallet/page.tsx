@@ -21,11 +21,10 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { createWalletClient, custom, parseEther } from 'viem';
-import { celoSepolia } from 'viem/chains';
+import { celo } from 'viem/chains';
 import GoodDollarVerifyGate from '@/components/GoodDollarVerifyGate';
 
-// GoodDollar is not deployed on Celo Sepolia testnet — placeholder for future
-const GOOD_DOLLAR_ADDRESS = '0xC12D1c73a457c1c5cd70eE8B790c50F46ec563Fa';
+const GOOD_DOLLAR_ADDRESS = (process.env.NEXT_PUBLIC_DEV_G_TOKEN || '0xFa51eFDc0910CCdA91732e6806912Fa12e2FD475') as `0x${string}`;
 
 interface NFTItem {
   id: string;
@@ -119,7 +118,7 @@ export default function WalletPage() {
       setGdBalance(data.gdBalance ?? '0.00');
 
       if (!data.success) {
-        toast('Could not reach Celo Sepolia RPC. Balance may be unavailable.', {
+        toast('Could not reach Celo RPC. Balance may be unavailable.', {
           icon: '⚠️',
           duration: 5000,
           style: {
@@ -191,12 +190,12 @@ export default function WalletPage() {
     const loadingToast = toast.loading(`Sending ${amount} ${sendToken}...`);
 
     try {
-      // Ensure connected to Celo Sepolia
-      await activeWallet.switchChain(11142220);
+      // Ensure connected to Celo Mainnet
+      await activeWallet.switchChain(42220);
 
       const provider = await activeWallet.getEthereumProvider();
       const walletClient = createWalletClient({
-        chain: celoSepolia,
+        chain: celo,
         transport: custom(provider),
       });
 
@@ -273,7 +272,7 @@ export default function WalletPage() {
               <h1 className="text-2xl font-bold">Web3 Wallet</h1>
               <div className="flex items-center gap-2 mt-1">
                 <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-medium">
-                  Celo Sepolia
+                  Celo Mainnet
                 </span>
                 <span className="text-xs text-muted-foreground flex items-center gap-1">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Secure
@@ -440,7 +439,7 @@ export default function WalletPage() {
             {nftFilter === 'onchain' && isLoadingNfts && (
               <div className="flex flex-col items-center justify-center py-16">
                 <Loader2 className="w-8 h-8 animate-spin text-primary mb-3" />
-                <p className="text-sm text-muted-foreground">Scanning Celo Sepolia for NFTs...</p>
+                <p className="text-sm text-muted-foreground">Scanning Celo Mainnet for NFTs...</p>
               </div>
             )}
 
@@ -449,7 +448,7 @@ export default function WalletPage() {
                 <ImageIcon className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
                 <h4 className="font-bold text-base mb-2">No On-Chain NFTs Found</h4>
                 <p className="text-xs text-muted-foreground max-w-sm mx-auto mb-5 leading-relaxed">
-                  We scanned Celo Sepolia Testnet but didn&apos;t find any ERC-721 tokens owned by your address. 
+                  We scanned Celo Mainnet but didn&apos;t find any ERC-721 tokens owned by your address. 
                   You can see your simulated accomplishments in the &quot;Platform Achievement Badges&quot; tab!
                 </p>
                 <button
@@ -730,7 +729,7 @@ export default function WalletPage() {
                   </div>
                   <div>
                     <h5 className="text-[10px] text-muted-foreground uppercase font-semibold">Network</h5>
-                    <p className="text-sm font-semibold text-foreground mt-0.5">Celo Sepolia</p>
+                    <p className="text-sm font-semibold text-foreground mt-0.5">Celo Mainnet</p>
                   </div>
                   <div>
                     <h5 className="text-[10px] text-muted-foreground uppercase font-semibold">Standard</h5>
@@ -741,8 +740,8 @@ export default function WalletPage() {
                 <div className="flex gap-3 pt-2">
                   <a
                     href={selectedNFT.isReal 
-                      ? `https://celo-sepolia.blockscout.com/token/${selectedNFT.contractAddress}?a=${walletAddress}`
-                      : `https://celo-sepolia.blockscout.com/address/${GOOD_DOLLAR_ADDRESS}`
+                      ? `https://celo.blockscout.com/token/${selectedNFT.contractAddress}?a=${walletAddress}`
+                      : `https://celo.blockscout.com/address/${GOOD_DOLLAR_ADDRESS}`
                     }
                     target="_blank"
                     rel="noopener noreferrer"

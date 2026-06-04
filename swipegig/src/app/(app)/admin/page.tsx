@@ -599,7 +599,7 @@ export default function AdminPage() {
                       </p>
                       <p className="font-mono text-xs text-muted-foreground break-all">{c.address}</p>
                       <a
-                        href={`https://celo-sepolia.blockscout.com/address/${c.address}`}
+                        href={`https://celo.blockscout.com/address/${c.address}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1.5 mt-3 text-[11px] text-primary hover:underline font-medium"

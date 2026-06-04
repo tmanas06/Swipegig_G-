@@ -48,8 +48,8 @@ export async function GET(req: Request) {
     console.error('[DB_NFT_LOOKUP_ERROR]', dbError);
   }
 
-  // 2. Fetch other real Celo Sepolia NFTs from Blockscout
-  const celoscanUrl = `https://celo-sepolia.blockscout.com/api?module=account&action=tokennfttx&address=${address}`;
+  // 2. Fetch other real Celo Mainnet NFTs from Blockscout
+  const celoscanUrl = `https://celo.blockscout.com/api?module=account&action=tokennfttx&address=${address}`;
 
   try {
     const response = await fetch(celoscanUrl);

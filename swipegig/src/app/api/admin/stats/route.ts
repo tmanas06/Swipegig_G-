@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
       pool: process.env.POOL_CONTRACT_ADDRESS || null,
       mockGD: process.env.MOCK_GD_TOKEN_ADDRESS || null,
       deployer: process.env.DEPLOYER_ADDRESS || null,
-      network: 'Celo Sepolia (11142220)',
+      network: 'Celo Mainnet (42220)',
     };
 
     const isDeployed = (addr: string | null) =>

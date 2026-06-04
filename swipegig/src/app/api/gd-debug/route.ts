@@ -1,11 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createPublicClient, http, type Address } from 'viem';
-import { celo } from 'viem/chains';
-import {
-  GOODDOLLAR_IDENTITY_CONTRACT,
-  CELO_MAINNET_RPC,
-  IDENTITY_CONTRACT_ABI,
-} from '@/lib/gooddollar/constants';
+import { checkGoodDollarVerification } from '@/lib/gooddollar/identity';
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,39 +12,12 @@ export async function GET(request: NextRequest) {
 
     console.log('[GD_DEBUG] Querying Celo Mainnet for:', address);
     
-    const client = createPublicClient({
-      chain: celo,
-      transport: http(CELO_MAINNET_RPC),
-    });
-
-    const [isWhitelisted, lastAuthenticatedRaw, authPeriodRaw] = await Promise.all([
-      client.readContract({
-        address: GOODDOLLAR_IDENTITY_CONTRACT,
-        abi: IDENTITY_CONTRACT_ABI,
-        functionName: 'isWhitelisted',
-        args: [address as Address],
-      }),
-      client.readContract({
-        address: GOODDOLLAR_IDENTITY_CONTRACT,
-        abi: IDENTITY_CONTRACT_ABI,
-        functionName: 'lastAuthenticated',
-        args: [address as Address],
-      }),
-      client.readContract({
-        address: GOODDOLLAR_IDENTITY_CONTRACT,
-        abi: IDENTITY_CONTRACT_ABI,
-        functionName: 'authenticationPeriod',
-      }),
-    ]);
+    const result = await checkGoodDollarVerification(address);
 
     return NextResponse.json({
       success: true,
       address,
-      contract: GOODDOLLAR_IDENTITY_CONTRACT,
-      rpc: CELO_MAINNET_RPC,
-      isWhitelisted,
-      lastAuthenticated: Number(lastAuthenticatedRaw),
-      authenticationPeriodDays: Number(authPeriodRaw),
+      ...result,
     });
   } catch (err: any) {
     console.error('[GD_DEBUG_ERROR]', err);

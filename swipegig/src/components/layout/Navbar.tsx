@@ -273,7 +273,7 @@ export default function Navbar() {
 
       {/* Mobile Bottom Nav */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 glass border-t border-border z-50 safe-area-bottom">
-        <div className="flex items-center justify-around px-2 py-2">
+        <div className="flex items-center justify-around px-1 py-2">
           {allNavItems.slice(0, 5).map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
             return (
@@ -281,7 +281,7 @@ export default function Navbar() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  'flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all duration-200 relative',
+                  'flex flex-col items-center gap-0.5 min-w-0 flex-1 py-1.5 rounded-xl transition-all duration-200 relative',
                   isActive
                     ? 'text-primary'
                     : 'text-muted-foreground'
@@ -295,7 +295,7 @@ export default function Navbar() {
                   />
                 )}
                 <item.icon className={cn('w-5 h-5', isActive && item.color)} />
-                <span className="text-[10px] font-medium">{item.label}</span>
+                <span className="text-[10px] font-medium truncate max-w-full">{item.label}</span>
               </Link>
             );
           })}
@@ -303,7 +303,7 @@ export default function Navbar() {
           {/* More Menu */}
           <button
             onClick={() => setMobileMenuOpen(true)}
-            className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-muted-foreground"
+            className="flex flex-col items-center gap-0.5 min-w-0 flex-1 py-1.5 rounded-xl text-muted-foreground"
           >
             <Menu className="w-5 h-5" />
             <span className="text-[10px] font-medium">More</span>
@@ -318,76 +318,107 @@ export default function Navbar() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="lg:hidden fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm"
+            className="lg:hidden fixed inset-0 z-[60]"
             onClick={() => setMobileMenuOpen(false)}
           >
+            {/* Scrim / backdrop */}
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-md" />
+
+            {/* Bottom sheet */}
             <motion.div
               initial={{ y: '100%' }}
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="absolute bottom-0 left-0 right-0 glass rounded-t-3xl p-6 pb-10"
+              className="absolute bottom-0 left-0 right-0 rounded-t-3xl border-t border-white/10 overflow-hidden"
+              style={{ background: 'var(--background)' }}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold">Menu</h3>
-                <div className="flex items-center gap-3">
-                  {authenticated && (
-                    <VerificationStatusBadge
-                      isVerified={isVerified}
-                      verifiedAt={verifiedAt}
-                      expiresAt={expiresAt}
-                      isExpiringSoon={isExpiringSoon}
-                      onVerifyClick={() => {
-                        setMobileMenuOpen(false);
-                        router.push('/settings');
-                      }}
-                    />
-                  )}
-                  <button
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="p-2 rounded-xl hover:bg-white/10 transition-colors"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
+              {/* Drag handle */}
+              <div className="flex justify-center pt-3 pb-1">
+                <div className="w-10 h-1 rounded-full bg-white/20" />
+              </div>
+
+              <div className="px-6 pt-2 pb-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Menu</h3>
+                  <div className="flex items-center gap-3">
+                    {authenticated && (
+                      <VerificationStatusBadge
+                        isVerified={isVerified}
+                        verifiedAt={verifiedAt}
+                        expiresAt={expiresAt}
+                        isExpiringSoon={isExpiringSoon}
+                        onVerifyClick={() => {
+                          setMobileMenuOpen(false);
+                          router.push('/settings');
+                        }}
+                      />
+                    )}
+                    <button
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="p-2 rounded-xl hover:bg-white/10 transition-colors"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                {allNavItems.map((item) => {
-                  const isActive = pathname === item.href;
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      onClick={() => setMobileMenuOpen(false)}
-                      className={cn(
-                        'flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200',
-                        isActive
-                          ? 'bg-primary/10 text-primary'
-                          : 'text-foreground hover:bg-white/5'
-                      )}
-                    >
-                      <item.icon className={cn('w-5 h-5', isActive && item.color)} />
-                      <span className="flex-1 text-sm font-medium">{item.label}</span>
-                      <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                    </Link>
-                  );
-                })}
+              {/* Scrollable nav items with max height */}
+              <div className="px-6 pb-6 overflow-y-auto" style={{ maxHeight: '60vh' }}>
+                <div className="space-y-1">
+                  {allNavItems.map((item) => {
+                    const isActive = pathname === item.href;
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setMobileMenuOpen(false)}
+                        className={cn(
+                          'flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200',
+                          isActive
+                            ? 'bg-primary/10 text-primary'
+                            : 'text-foreground hover:bg-white/5'
+                        )}
+                      >
+                        <item.icon className={cn('w-5 h-5', isActive && item.color)} />
+                        <span className="flex-1 text-sm font-medium">{item.label}</span>
+                        <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                      </Link>
+                    );
+                  })}
+                </div>
 
-                {authenticated && (
-                  <button
-                    onClick={() => {
-                      logout();
-                      setMobileMenuOpen(false);
-                    }}
-                    className="flex items-center gap-3 px-4 py-3 rounded-xl text-red-400 hover:bg-red-500/10 transition-all duration-200 w-full mt-4 border-t border-border pt-4"
+                {/* Settings & Sign Out section */}
+                <div className="mt-4 pt-4 border-t border-border space-y-1">
+                  <Link
+                    href="/settings"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl text-foreground hover:bg-white/5 transition-all duration-200"
                   >
-                    <LogOut className="w-5 h-5" />
-                    <span className="flex-1 text-left text-sm font-medium">Sign Out</span>
-                  </button>
-                )}
+                    <Settings className="w-5 h-5 text-gray-400" />
+                    <span className="flex-1 text-sm font-medium">Settings</span>
+                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                  </Link>
+
+                  {authenticated && (
+                    <button
+                      onClick={() => {
+                        logout();
+                        setMobileMenuOpen(false);
+                      }}
+                      className="flex items-center gap-3 px-4 py-3 rounded-xl text-red-400 hover:bg-red-500/10 transition-all duration-200 w-full"
+                    >
+                      <LogOut className="w-5 h-5" />
+                      <span className="flex-1 text-left text-sm font-medium">Sign Out</span>
+                    </button>
+                  )}
+                </div>
               </div>
+
+              {/* Safe area spacer at bottom */}
+              <div className="safe-area-bottom" />
             </motion.div>
           </motion.div>
         )}

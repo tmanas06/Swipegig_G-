@@ -368,6 +368,20 @@ body {
   color: #A78BFA;
 }
 
+/* ─── Mobile Safe Area & Layout ──────────────────────── */
+
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Mobile app content fills space between top and bottom nav */
+.mobile-app-content {
+  /* Use dvh (dynamic viewport height) for proper sizing on mobile browsers
+     that have collapsing URL bars. Falls back to vh for older browsers. */
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
 /* ─── Light Mode Tailwind Class Overrides ────────────────── */
 [data-theme="light"] {
   /* Override bg-white opacities for light mode backgrounds */

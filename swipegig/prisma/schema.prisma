@@ -101,6 +101,7 @@ model User {
   rewards       Reward[]
   reviews       Review[]
   recruiter     Recruiter?
+  verificationLogs VerificationCheckLog[]
 
   @@index([walletAddress])
   @@index([privyId])
@@ -284,6 +285,7 @@ model VerificationCheckLog {
   id        String   @id @default(cuid())
   userId    String
   checkedAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, checkedAt])
 }

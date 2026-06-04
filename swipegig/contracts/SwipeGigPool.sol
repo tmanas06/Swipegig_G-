@@ -1,111 +1,109 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-abstract contract Ownable {
-    address private _owner;
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+contract SwipeGigPool is Ownable {
+    IERC20 public gToken;
+    address public backendSigner;
 
-    constructor(address initialOwner) {
-        _owner = initialOwner;
-        emit OwnershipTransferred(address(0), initialOwner);
+    // Stream rate: G$ per second per active user
+    uint256 public streamRatePerSecond = 0.0001 ether;
+
+    struct Streamer {
+        bool isActive;
+        uint256 lastClaimedAt;
+        uint256 totalClaimed;
+        uint256 joinedAt;
     }
 
-    function owner() public view virtual returns (address) {
-        return _owner;
-    }
+    mapping(address => Streamer) public streamers;
+    address[] public activeStreamers;
+    uint256 public activeStreamerCount;
 
-    modifier onlyOwner() {
-        require(owner() == msg.sender, "Ownable: caller is not the owner");
-        _;
-    }
-
-    function transferOwnership(address newOwner) public virtual onlyOwner {
-        require(newOwner != address(0), "Ownable: new owner is the zero address");
-        emit OwnershipTransferred(_owner, newOwner);
-        _owner = newOwner;
-    }
-}
-
-abstract contract ReentrancyGuard {
-    uint256 private constant _NOT_ENTERED = 1;
-    uint256 private constant _ENTERED = 2;
-
-    uint256 private _status;
-
-    constructor() {
-        _status = _NOT_ENTERED;
-    }
-
-    modifier nonReentrant() {
-        require(_status != _ENTERED, "ReentrancyGuard: reentrant call");
-        _status = _ENTERED;
-        _;
-        _status = _NOT_ENTERED;
-    }
-}
-
-interface IERC20 {
-    function transfer(address to, uint256 amount) external returns (bool);
-    function transferFrom(address from, address to, uint256 amount) external returns (bool);
-    function balanceOf(address account) external view returns (uint256);
-}
-
-contract SwipeGigPool is Ownable, ReentrancyGuard {
-    IERC20 public goodDollarToken;
-    
-    uint256 public weeklyClaimAmount;
-    uint256 public activityThreshold;
-
-    mapping(address => uint256) public lastClaimedTimestamp;
-    mapping(address => uint256) public weeklyActivity;
-    
-    event Claimed(address indexed user, uint256 amount, uint256 timestamp);
-    event ActivityLogged(address indexed user, uint256 newActivityCount, uint256 timestamp);
+    event StreamerAdded(address indexed user, uint256 timestamp);
+    event StreamerRemoved(address indexed user, uint256 timestamp);
+    event StreamClaimed(address indexed user, uint256 amount, uint256 timestamp);
     event PoolFunded(address indexed donor, uint256 amount, uint256 timestamp);
 
-    constructor(
-        address _goodDollarToken,
-        uint256 _weeklyClaimAmount,
-        uint256 _activityThreshold
-    ) Ownable(msg.sender) {
-        goodDollarToken = IERC20(_goodDollarToken);
-        weeklyClaimAmount = _weeklyClaimAmount;
-        activityThreshold = _activityThreshold;
+    modifier onlyBackend() {
+        require(msg.sender == backendSigner, "Not authorized");
+        _;
     }
 
-    function setParams(uint256 _weeklyClaimAmount, uint256 _activityThreshold) external onlyOwner {
-        weeklyClaimAmount = _weeklyClaimAmount;
-        activityThreshold = _activityThreshold;
+    constructor(address _gToken, address _backendSigner) Ownable(msg.sender) {
+        gToken = IERC20(_gToken);
+        backendSigner = _backendSigner;
     }
 
-    function logActivity(address user, uint256 count) external onlyOwner {
-        weeklyActivity[user] += count;
-        emit ActivityLogged(user, weeklyActivity[user], block.timestamp);
+    /// @notice Add a verified job seeker to the stream
+    function addStreamer(address user) external onlyBackend {
+        require(!streamers[user].isActive, "Already streaming");
+        streamers[user] = Streamer({
+            isActive: true,
+            lastClaimedAt: block.timestamp,
+            totalClaimed: 0,
+            joinedAt: block.timestamp
+        });
+        activeStreamers.push(user);
+        activeStreamerCount++;
+        emit StreamerAdded(user, block.timestamp);
     }
 
-    function resetActivity(address user) external onlyOwner {
-        weeklyActivity[user] = 0;
+    /// @notice Remove a user from the stream (missed weekly activity)
+    function removeStreamer(address user) external onlyBackend {
+        require(streamers[user].isActive, "Not streaming");
+        streamers[user].isActive = false;
+        activeStreamerCount--;
+        emit StreamerRemoved(user, block.timestamp);
     }
 
-    function fundPool(uint256 amount) external nonReentrant {
-        require(amount > 0, "Amount must be greater than zero");
-        require(goodDollarToken.transferFrom(msg.sender, address(this), amount), "Transfer failed");
+    /// @notice User claims their accumulated G$ stream
+    function claimStream() external {
+        Streamer storage s = streamers[msg.sender];
+        require(s.isActive, "Not an active streamer");
+
+        uint256 elapsed = block.timestamp - s.lastClaimedAt;
+        uint256 claimable = elapsed * streamRatePerSecond;
+
+        require(claimable > 0, "Nothing to claim");
+        require(
+            gToken.balanceOf(address(this)) >= claimable,
+            "Pool insufficient funds"
+        );
+
+        s.lastClaimedAt = block.timestamp;
+        s.totalClaimed += claimable;
+
+        gToken.transfer(msg.sender, claimable);
+        emit StreamClaimed(msg.sender, claimable, block.timestamp);
+    }
+
+    /// @notice View claimable amount for a user
+    function claimableAmount(address user) external view returns (uint256) {
+        Streamer memory s = streamers[user];
+        if (!s.isActive) return 0;
+        uint256 elapsed = block.timestamp - s.lastClaimedAt;
+        return elapsed * streamRatePerSecond;
+    }
+
+    /// @notice Anyone can fund the pool
+    function fundPool(uint256 amount) external {
+        gToken.transferFrom(msg.sender, address(this), amount);
         emit PoolFunded(msg.sender, amount, block.timestamp);
     }
 
-    function claimWeeklyReward() external nonReentrant {
-        require(block.timestamp >= lastClaimedTimestamp[msg.sender] + 7 days, "Claim limit is weekly");
-        require(weeklyActivity[msg.sender] >= activityThreshold, "Insufficient activity count");
+    /// @notice Pool balance
+    function poolBalance() external view returns (uint256) {
+        return gToken.balanceOf(address(this));
+    }
 
-        uint256 poolBalance = goodDollarToken.balanceOf(address(this));
-        require(poolBalance >= weeklyClaimAmount, "Insufficient pool funding");
+    function setStreamRate(uint256 rate) external onlyOwner {
+        streamRatePerSecond = rate;
+    }
 
-        lastClaimedTimestamp[msg.sender] = block.timestamp;
-        weeklyActivity[msg.sender] = 0;
-
-        require(goodDollarToken.transfer(msg.sender, weeklyClaimAmount), "Transfer failed");
-        
-        emit Claimed(msg.sender, weeklyClaimAmount, block.timestamp);
+    function setBackendSigner(address _signer) external onlyOwner {
+        backendSigner = _signer;
     }
 }

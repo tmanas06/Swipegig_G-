@@ -44,6 +44,8 @@ export async function POST(request: NextRequest) {
       where: { privyId: privyUserId },
       select: {
         id: true,
+        isGoodDollarVerified: true,
+        walletAddress: true,
       },
     });
 
@@ -58,7 +60,7 @@ export async function POST(request: NextRequest) {
     const limitWindowStart = new Date(Date.now() - 60 * 60 * 1000); // 1 hour ago
     const pruneThreshold = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 hours ago
 
-    const [_, checkCount] = await prisma.$transaction([
+    const [, checkCount] = await prisma.$transaction([
       prisma.verificationCheckLog.deleteMany({
         where: {
           userId: user.id,
@@ -90,7 +92,23 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // 4. Query GoodDollar contract status on Celo
+    // 4. Check uniqueness — another user may have this address
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        goodDollarAddress: goodWalletAddress,
+        NOT: { id: user.id },
+      },
+    });
+
+    if (existingUser) {
+      return NextResponse.json({
+        verified: false,
+        reason: 'address_taken',
+        message: 'This GoodWallet address is already linked to another SwipeGig account.',
+      });
+    }
+
+    // 5. Query GoodDollar contract status on Celo
     let verification;
     try {
       verification = await checkGoodDollarVerification(goodWalletAddress);
@@ -104,7 +122,7 @@ export async function POST(request: NextRequest) {
 
     const { isWhitelisted, lastAuthenticated, isExpired, expiresAt } = verification;
 
-    // 5. Whitelisted & Not Expired -> Verify User
+    // 6. Whitelisted & Not Expired -> Verify User
     if (isWhitelisted && !isExpired) {
       try {
         await prisma.user.update({
@@ -143,7 +161,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 6. Whitelisted & Expired
+    // 7. Whitelisted & Expired
     if (isWhitelisted && isExpired) {
       await prisma.user.update({
         where: { id: user.id },
@@ -165,7 +183,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 7. Not Whitelisted
+    // 8. Not Whitelisted
     return NextResponse.json({
       verified: false,
       reason: 'not_verified',
@@ -173,9 +191,11 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: unknown) {
     console.error('[GOODDOLLAR_CHECK_STATUS_ROUTE_ERROR]', error);
+    const message = error instanceof Error ? error.message : 'Something went wrong';
+    const isNetworkError = message.includes('GoodDollar network');
     return NextResponse.json(
-      { error: 'Server error', message: 'Something went wrong. Please try again.' },
-      { status: 500 }
+      { error: 'Server error', message },
+      { status: isNetworkError ? 503 : 500 }
     );
   }
 }

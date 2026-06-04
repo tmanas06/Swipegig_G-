@@ -1,90 +1,50 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-/**
- * @dev Interface for any contract that wants to support safeTransfers from ERC721 asset contracts.
- */
-interface IERC721Receiver {
-    function onERC721Received(
-        address operator,
-        address from,
-        uint256 tokenId,
-        bytes calldata data
-    ) external returns (bytes4);
-}
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
-/**
- * @title SwipeGigWelcomeNFT
- * @dev Self-contained ERC-721 Welcome Pass NFT for new SwipeGig joiners.
- */
-contract SwipeGigWelcomeNFT {
-    string public name = "SwipeGig Welcome Pass";
-    string public symbol = "SGWP";
+contract SwipeGigWelcomeNFT is ERC721, Ownable {
+    uint256 private _tokenIdCounter;
+    address public backendSigner;
 
-    mapping(uint256 => address) private _owners;
-    mapping(address => uint256) private _balances;
-    mapping(uint256 => string) private _tokenURIs;
-    
-    address public owner;
-    uint256 private _nextTokenId;
+    mapping(address => bool) public hasMinted;
 
-    event Transfer(address indexed from, address indexed to, uint256 indexed tokenId);
-    event WelcomeNFTMinted(address indexed recipient, uint256 indexed tokenId, string tokenURI);
+    string private _baseTokenURI;
 
-    modifier onlyOwner() {
-        require(msg.sender == owner, "Only owner can call");
+    event WelcomeNFTMinted(address indexed user, uint256 tokenId);
+
+    modifier onlyBackend() {
+        require(msg.sender == backendSigner, "Not authorized");
         _;
     }
 
-    constructor() {
-        owner = msg.sender;
+    constructor(
+        address _backendSigner,
+        string memory baseURI
+    ) ERC721("SwipeGig Verified", "SWGV") Ownable(msg.sender) {
+        backendSigner = _backendSigner;
+        _baseTokenURI = baseURI;
     }
 
-    function balanceOf(address account) external view returns (uint256) {
-        require(account != address(0), "Zero address query");
-        return _balances[account];
+    /// @notice Mint welcome NFT to a newly verified user
+    function mintWelcomeNFT(address user) external onlyBackend {
+        require(!hasMinted[user], "Already minted");
+        hasMinted[user] = true;
+        uint256 tokenId = _tokenIdCounter++;
+        _safeMint(user, tokenId);
+        emit WelcomeNFTMinted(user, tokenId);
     }
 
-    function ownerOf(uint256 tokenId) external view returns (address) {
-        address ownerAddress = _owners[tokenId];
-        require(ownerAddress != address(0), "Token does not exist");
-        return ownerAddress;
+    function _baseURI() internal view override returns (string memory) {
+        return _baseTokenURI;
     }
 
-    function tokenURI(uint256 tokenId) external view returns (string memory) {
-        require(_owners[tokenId] != address(0), "Token does not exist");
-        return _tokenURIs[tokenId];
+    function setBaseURI(string memory baseURI) external onlyOwner {
+        _baseTokenURI = baseURI;
     }
 
-    function mintWelcomeNFT(address to, string calldata uri) external onlyOwner returns (uint256) {
-        require(to != address(0), "Mint to zero address");
-        
-        uint256 tokenId = _nextTokenId++;
-        _balances[to] += 1;
-        _owners[tokenId] = to;
-        _tokenURIs[tokenId] = uri;
-
-        emit Transfer(address(0), to, tokenId);
-        emit WelcomeNFTMinted(to, tokenId, uri);
-
-        // Safe transfer check for contract recipients
-        if (to.code.length > 0) {
-            try IERC721Receiver(to).onERC721Received(msg.sender, address(0), tokenId, "") returns (bytes4 retval) {
-                require(retval == IERC721Receiver.onERC721Received.selector, "ERC721: transfer to non ERC721Receiver implementer");
-            } catch {
-                revert("ERC721: transfer to non ERC721Receiver implementer");
-            }
-        }
-
-        return tokenId;
-    }
-
-    /**
-     * @dev ERC-165 support for standard ERC-721 detection on block explorers.
-     */
-    function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
-        return interfaceId == 0x80ac58cd || // ERC-721
-               interfaceId == 0x5b5e139f || // ERC-721Metadata
-               interfaceId == 0x01ffc9a7;   // ERC-165
+    function setBackendSigner(address _signer) external onlyOwner {
+        backendSigner = _signer;
     }
 }

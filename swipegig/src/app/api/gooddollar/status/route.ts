@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
 
     let isVerified = user.isGoodDollarVerified;
 
-    // Auto-expire if past expiry date (Option A)
+    // Auto-expire if past expiry date
     if (isVerified && user.verificationExpiredAt && user.verificationExpiredAt < new Date()) {
       await prisma.user.update({
         where: { id: user.id },
@@ -52,6 +52,10 @@ export async function GET(request: NextRequest) {
       isExpiringSoon = msUntilExpiry > 0 && msUntilExpiry < fourteenDaysMs;
     }
 
+    const aiPromptsRemaining = isVerified
+      ? null
+      : Math.max(0, user.aiPromptsLimit - user.aiPromptsUsed);
+
     return NextResponse.json({
       isVerified,
       verifiedAt: user.goodDollarVerifiedAt?.toISOString() ?? null,
@@ -59,7 +63,7 @@ export async function GET(request: NextRequest) {
       expiresAt: user.verificationExpiredAt?.toISOString() ?? null,
       aiPromptsUsed: user.aiPromptsUsed,
       aiPromptsLimit: user.aiPromptsLimit,
-      aiPromptsRemaining: isVerified ? null : Math.max(0, user.aiPromptsLimit - user.aiPromptsUsed),
+      aiPromptsRemaining,
       isExpiringSoon,
     });
   } catch (error: unknown) {

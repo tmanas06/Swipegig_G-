@@ -6,6 +6,11 @@ import { Shield, Loader2, ExternalLink } from 'lucide-react';
 import { useGoodDollarVerification } from '@/hooks/useGoodDollarVerification';
 import { useCheckGoodDollarStatus } from '@/hooks/useCheckGoodDollarStatus';
 
+import { useWallets } from '@privy-io/react-auth';
+import { createPublicClient, createWalletClient, custom, http } from 'viem';
+import { celo } from 'viem/chains';
+import { IdentitySDK } from '@goodsdks/citizen-sdk';
+
 const descriptions = {
   wallet: 'Access your G$ wallet and track your token earnings',
   rewards: 'Earn G$ tokens for applying to jobs, getting interviews, and growing your career',
@@ -21,6 +26,7 @@ interface GoodDollarVerifyGateProps {
 export default function GoodDollarVerifyGate({ children, feature }: GoodDollarVerifyGateProps) {
   const { isVerified, isLoading } = useGoodDollarVerification();
   const { mutate: checkStatus, isPending } = useCheckGoodDollarStatus();
+  const { wallets } = useWallets();
 
   const [step, setStep] = useState<'idle' | 'verifying' | 'checking'>('idle');
   const [addressInput, setAddressInput] = useState('');
@@ -28,9 +34,48 @@ export default function GoodDollarVerifyGate({ children, feature }: GoodDollarVe
   const [checkResult, setCheckResult] = useState<'verified' | 'not_verified' | 'expired' | null>(null);
   const [resultMessage, setResultMessage] = useState<string | null>(null);
 
-  const handleOpenWallet = () => {
-    window.open('https://wallet.gooddollar.org', '_blank');
-    setStep('verifying');
+  const handleOpenWallet = async () => {
+    try {
+      const activeWallet = wallets[0];
+      if (!activeWallet) {
+        // Fallback if no wallet is connected
+        window.open('https://wallet.gooddollar.org', '_blank');
+        setStep('verifying');
+        return;
+      }
+
+      const publicClient = createPublicClient({
+        chain: celo,
+        transport: http('https://forno.celo.org'),
+      });
+
+      const ethereumProvider = await activeWallet.getEthereumProvider();
+      const walletClient = createWalletClient({
+        account: activeWallet.address as `0x${string}`,
+        chain: celo,
+        transport: custom(ethereumProvider),
+      });
+
+      const identitySDK = await IdentitySDK.init({
+        publicClient: publicClient as any,
+        walletClient: walletClient as any,
+        env: 'production',
+      });
+
+      const callbackUrl = `${window.location.origin}/verify/callback?verified=true`;
+      const fvLink = await identitySDK.generateFVLink(
+        false, // popupMode
+        callbackUrl
+      );
+
+      window.open(fvLink, '_blank');
+      setStep('verifying');
+    } catch (error) {
+      console.error('Failed to generate FV link:', error);
+      // Fallback
+      window.open('https://wallet.gooddollar.org', '_blank');
+      setStep('verifying');
+    }
   };
 
   const handleCheck = () => {

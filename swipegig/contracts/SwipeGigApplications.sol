@@ -1,91 +1,77 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-abstract contract Ownable {
-    address private _owner;
+import "@openzeppelin/contracts/access/Ownable.sol";
 
-    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
-
-    constructor(address initialOwner) {
-        _owner = initialOwner;
-        emit OwnershipTransferred(address(0), initialOwner);
+contract SwipeGigApplications is Ownable {
+    struct Application {
+        address applicant;
+        string jobId;
+        string company;
+        uint256 appliedAt;
+        uint8 status; // 0=applied, 1=interviewing, 2=offered, 3=rejected
     }
 
-    function owner() public view virtual returns (address) {
-        return _owner;
-    }
+    mapping(address => Application[]) public userApplications;
+    mapping(address => uint256) public applicationCount;
 
-    modifier onlyOwner() {
-        require(owner() == msg.sender, "Ownable: caller is not the owner");
+    address public backendSigner;
+
+    event ApplicationRecorded(
+        address indexed applicant,
+        string jobId,
+        string company,
+        uint256 timestamp
+    );
+
+    event ApplicationStatusUpdated(
+        address indexed applicant,
+        uint256 applicationIndex,
+        uint8 newStatus
+    );
+
+    modifier onlyBackend() {
+        require(msg.sender == backendSigner, "Not authorized");
         _;
     }
 
-    function transferOwnership(address newOwner) public virtual onlyOwner {
-        require(newOwner != address(0), "Ownable: new owner is the zero address");
-        emit OwnershipTransferred(_owner, newOwner);
-        _owner = newOwner;
-    }
-}
-
-contract SwipeGigApplications is Ownable {
-    enum ApplicationStatus {
-        APPLIED,
-        INTERVIEWING,
-        OFFERED,
-        REJECTED,
-        WITHDRAWN
+    constructor(address _backendSigner) Ownable(msg.sender) {
+        backendSigner = _backendSigner;
     }
 
-    struct ApplicationRecord {
-        uint256 id;
-        string jobId;
-        string companyName;
-        ApplicationStatus status;
-        uint256 timestamp;
-    }
-
-    mapping(address => ApplicationRecord[]) private userApplications;
-    uint256 public nextApplicationId;
-
-    event ApplicationRecorded(address indexed user, uint256 indexed id, string jobId, string companyName, uint256 timestamp);
-    event StatusUpdated(address indexed user, uint256 indexed id, ApplicationStatus status, uint256 timestamp);
-
-    constructor() Ownable(msg.sender) {}
-
-    function recordApplication(address user, string calldata jobId, string calldata companyName) external onlyOwner returns (uint256) {
-        require(user != address(0), "Invalid user address");
-        
-        uint256 appId = nextApplicationId++;
-        
-        userApplications[user].push(ApplicationRecord({
-            id: appId,
+    function recordApplication(
+        address applicant,
+        string calldata jobId,
+        string calldata company
+    ) external onlyBackend {
+        userApplications[applicant].push(Application({
+            applicant: applicant,
             jobId: jobId,
-            companyName: companyName,
-            status: ApplicationStatus.APPLIED,
-            timestamp: block.timestamp
+            company: company,
+            appliedAt: block.timestamp,
+            status: 0
         }));
-
-        emit ApplicationRecorded(user, appId, jobId, companyName, block.timestamp);
-        return appId;
+        applicationCount[applicant]++;
+        emit ApplicationRecorded(applicant, jobId, company, block.timestamp);
     }
 
-    function updateStatus(address user, uint256 appId, ApplicationStatus status) external onlyOwner {
-        ApplicationRecord[] storage apps = userApplications[user];
-        bool found = false;
-        
-        for (uint256 i = 0; i < apps.length; i++) {
-            if (apps[i].id == appId) {
-                apps[i].status = status;
-                found = true;
-                emit StatusUpdated(user, appId, status, block.timestamp);
-                break;
-            }
-        }
-        
-        require(found, "Application not found");
+    function updateApplicationStatus(
+        address applicant,
+        uint256 index,
+        uint8 status
+    ) external onlyBackend {
+        require(index < userApplications[applicant].length, "Invalid index");
+        userApplications[applicant][index].status = status;
+        emit ApplicationStatusUpdated(applicant, index, status);
     }
 
-    function getApplications(address user) external view returns (ApplicationRecord[] memory) {
-        return userApplications[user];
+    function getApplications(
+        address applicant
+    ) external view returns (Application[] memory) {
+        return userApplications[applicant];
+    }
+
+    function setBackendSigner(address _signer) external onlyOwner {
+        backendSigner = _signer;
     }
 }

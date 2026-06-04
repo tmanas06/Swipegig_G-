@@ -57,9 +57,9 @@ export default function Providers({ children }: { children: ReactNode }) {
             },
           },
           defaultChain: {
-            id: 11142220,
-            name: 'Celo Sepolia Testnet',
-            network: 'celo-sepolia',
+            id: 42220,
+            name: 'Celo',
+            network: 'celo',
             nativeCurrency: {
               name: 'CELO',
               symbol: 'CELO',
@@ -67,18 +67,38 @@ export default function Providers({ children }: { children: ReactNode }) {
             },
             rpcUrls: {
               default: {
-                http: ['https://forno.celo-sepolia.celo-testnet.org'],
+                http: ['https://forno.celo.org'],
               },
             },
             blockExplorers: {
               default: {
-                name: 'Blockscout',
-                url: 'https://celo-sepolia.blockscout.com',
+                name: 'Celoscan',
+                url: 'https://celoscan.io',
               },
             },
-            testnet: true,
           },
           supportedChains: [
+            {
+              id: 42220,
+              name: 'Celo',
+              network: 'celo',
+              nativeCurrency: {
+                name: 'CELO',
+                symbol: 'CELO',
+                decimals: 18,
+              },
+              rpcUrls: {
+                default: {
+                  http: ['https://forno.celo.org'],
+                },
+              },
+              blockExplorers: {
+                default: {
+                  name: 'Celoscan',
+                  url: 'https://celoscan.io',
+                },
+              },
+            },
             {
               id: 11142220,
               name: 'Celo Sepolia Testnet',

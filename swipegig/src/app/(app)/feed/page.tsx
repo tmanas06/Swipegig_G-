@@ -540,7 +540,7 @@ export default function FeedPage() {
       </div>
 
       {/* Card Stack */}
-      <div className="relative flex items-center justify-center h-[calc(100vh-220px)] lg:h-[calc(100vh-160px)] overflow-hidden animate-fade-in">
+      <div className="relative flex items-center justify-center h-[calc(100dvh-220px-env(safe-area-inset-bottom,0px))] lg:h-[calc(100vh-160px)] overflow-hidden animate-fade-in">
         {/* Action Indicator */}
         <AnimatePresence>
           {actionIndicator && (
@@ -708,7 +708,7 @@ export default function FeedPage() {
       </div>
 
       {/* Bottom Controls */}
-      <div className="fixed bottom-20 lg:bottom-8 left-1/2 -translate-x-1/2 z-30">
+      <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] lg:bottom-8 left-1/2 -translate-x-1/2 z-30">
         <div className="flex items-center gap-3">
           {/* Undo */}
           <button

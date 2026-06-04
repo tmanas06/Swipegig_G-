@@ -11,7 +11,7 @@ export default function AppLayout({
       <Suspense fallback={null}>
         <Navbar />
       </Suspense>
-      <main className="lg:pl-[72px] pb-20 lg:pb-0 min-h-screen">
+      <main className="lg:pl-[72px] pb-[calc(5rem+env(safe-area-inset-bottom,0px))] lg:pb-0 min-h-screen">
         {children}
       </main>
     </>

@@ -1,94 +1,98 @@
-import { createPublicClient, http, type Address } from 'viem';
+import { createPublicClient, http, isAddress, type Address } from 'viem';
 import { celo } from 'viem/chains';
+import {
+  initializeIdentityContract,
+  identityV2ABI,
+  chainConfigs,
+  SupportedChains,
+} from '@goodsdks/citizen-sdk';
 
-// Constants
-export const IDENTITY_CONTRACT_ADDRESS = '0xC361A6E67822a0EDc17D899227dd9FC50BD62F42';
+// ── Constants ──────────────────────────────────────────────
 export const GOODWALLET_URL = 'https://wallet.gooddollar.org';
+export const DEV_G_TOKEN = '0xFa51eFDc0910CCdA91732e6806912Fa12e2FD475';
+export const REAL_G_TOKEN = '0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A';
+export const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
 
 const CELO_RPC_URL = 'https://forno.celo.org';
 
-const IDENTITY_CONTRACT_ABI = [
-  {
-    name: 'isWhitelisted',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [{ name: 'account', type: 'address' }],
-    outputs: [{ name: '', type: 'bool' }],
-  },
-  {
-    name: 'lastAuthenticated',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [{ name: 'account', type: 'address' }],
-    outputs: [{ name: '', type: 'uint256' }],
-  },
-  {
-    name: 'authenticationPeriod',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ name: '', type: 'uint256' }],
-  },
-] as const;
+// ── Read-only public client for Celo mainnet ───────────────
+const publicClient = createPublicClient({
+  chain: celo,
+  transport: http(CELO_RPC_URL),
+});
+
+// ── Identity contract from SDK chain configs ───────────────
+const celoConfig = chainConfigs[SupportedChains.CELO];
+const identityAddress = celoConfig?.contracts?.production?.identityContract;
+
+if (!identityAddress) {
+  throw new Error('Missing GoodDollar identity contract address for Celo production');
+}
+
+// Initialize the identity contract reference (read-only, no wallet client needed)
+const identityContract = initializeIdentityContract(publicClient as any, identityAddress as Address);
+
+// ── Helpers ────────────────────────────────────────────────
 
 /**
- * Validate address format before hitting the chain
+ * Validate Ethereum address format using viem's isAddress.
  */
 export function isValidEthAddress(address: string): boolean {
-  return /^0x[a-fA-F0-9]{40}$/.test(address);
+  return isAddress(address);
 }
 
 /**
  * Check if a GoodWallet address is face-verified on-chain.
- * Reads from the Identity contract on Celo Mainnet.
+ * Uses initializeIdentityContract + identityV2ABI from @goodsdks/citizen-sdk.
+ *
+ * Reads: getWhitelistedRoot, lastAuthenticated, authenticationPeriod
  */
 export async function checkGoodDollarVerification(
   goodWalletAddress: string
 ): Promise<{
   isWhitelisted: boolean;
-  lastAuthenticated: number;    // unix timestamp, 0 if never
-  isExpired: boolean;           // true if authPeriod has passed
-  expiresAt: number | null;     // unix timestamp when it expires
+  lastAuthenticated: number;
+  isExpired: boolean;
+  expiresAt: number | null;
 }> {
   if (!isValidEthAddress(goodWalletAddress)) {
     throw new Error('Invalid wallet address format');
   }
 
   try {
-    const client = createPublicClient({
-      chain: celo,
-      transport: http(CELO_RPC_URL),
-    });
+    const addr = goodWalletAddress as Address;
 
-    const address = goodWalletAddress as Address;
-
-    const [isWhitelisted, lastAuthenticatedRaw, authPeriodRaw] = await Promise.all([
-      client.readContract({
-        address: IDENTITY_CONTRACT_ADDRESS,
-        abi: IDENTITY_CONTRACT_ABI,
-        functionName: 'isWhitelisted',
-        args: [address],
+    // Batch all three reads in parallel
+    const [root, lastAuthRaw, authPeriodRaw] = await Promise.all([
+      publicClient.readContract({
+        address: identityContract.contractAddress,
+        abi: identityV2ABI,
+        functionName: 'getWhitelistedRoot',
+        args: [addr],
       }),
-      client.readContract({
-        address: IDENTITY_CONTRACT_ADDRESS,
-        abi: IDENTITY_CONTRACT_ABI,
+      publicClient.readContract({
+        address: identityContract.contractAddress,
+        abi: identityV2ABI,
         functionName: 'lastAuthenticated',
-        args: [address],
+        args: [addr],
       }),
-      client.readContract({
-        address: IDENTITY_CONTRACT_ADDRESS,
-        abi: IDENTITY_CONTRACT_ABI,
+      publicClient.readContract({
+        address: identityContract.contractAddress,
+        abi: identityV2ABI,
         functionName: 'authenticationPeriod',
       }),
     ]);
 
-    const lastAuthenticated = Number(lastAuthenticatedRaw);
+    // getWhitelistedRoot returns the root address; zero address means not whitelisted
+    const isWhitelisted = (root as Address) !== ZERO_ADDRESS;
+
+    const lastAuthenticated = Number(lastAuthRaw);
     const authPeriodDays = Number(authPeriodRaw);
     const authPeriodSeconds = authPeriodDays * 86400;
 
     const nowSeconds = Math.floor(Date.now() / 1000);
 
-    // If lastAuthenticated is 0, the address has never verified
+    // If never authenticated, not expired (just not verified)
     const isExpired = lastAuthenticated === 0
       ? false
       : (nowSeconds - lastAuthenticated) > authPeriodSeconds;

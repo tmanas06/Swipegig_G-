@@ -563,7 +563,7 @@ export default function FeedPage() {
       </div>
 
       {/* Card Stack */}
-      <div className="relative flex items-center justify-center h-[calc(100dvh-220px-env(safe-area-inset-bottom,0px))] lg:h-[calc(100vh-160px)] overflow-hidden animate-fade-in">
+      <div className="relative z-10 flex items-center justify-center h-[calc(100dvh-220px-env(safe-area-inset-bottom,0px))] lg:h-[calc(100vh-160px)] overflow-hidden animate-fade-in">
         {/* Action Indicator */}
         <AnimatePresence>
           {actionIndicator && (

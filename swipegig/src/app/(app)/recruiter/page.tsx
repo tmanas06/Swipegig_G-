@@ -1,6 +1,9 @@
 'use client';
 
-import { motion } from 'framer-motion';
+export const dynamic = 'force-dynamic';
+
+import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users,
   Search,
@@ -15,169 +18,338 @@ import {
   ChevronRight,
   Building2,
   Plus,
+  Loader2,
+  MapPin,
+  FileText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'react-hot-toast';
 
-const mockCandidates = [
-  {
-    id: '1',
-    name: 'Alex Chen',
-    headline: 'Senior Solidity Developer',
-    skills: ['Solidity', 'DeFi', 'Hardhat', 'TypeScript'],
-    isVerified: true,
-    matchScore: 94,
-    githubActivity: 'High',
-    location: 'San Francisco, CA',
-  },
-  {
-    id: '2',
-    name: 'Sarah Kim',
-    headline: 'Full-Stack Web3 Engineer',
-    skills: ['React', 'Next.js', 'Solidity', 'GraphQL'],
-    isVerified: true,
-    matchScore: 89,
-    githubActivity: 'High',
-    location: 'New York, NY',
-  },
-  {
-    id: '3',
-    name: 'Marcus Johnson',
-    headline: 'Smart Contract Auditor',
-    skills: ['Security', 'Solidity', 'Yul', 'Formal Verification'],
-    isVerified: false,
-    matchScore: 82,
-    githubActivity: 'Medium',
-    location: 'London, UK',
-  },
-  {
-    id: '4',
-    name: 'Priya Patel',
-    headline: 'DeFi Protocol Engineer',
-    skills: ['Solidity', 'Rust', 'DeFi', 'MEV'],
-    isVerified: true,
-    matchScore: 91,
-    githubActivity: 'Very High',
-    location: 'Remote',
-  },
-];
+// Custom SVG components since brands are missing from this lucide-react package version
+const GithubIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    {...props}
+  >
+    <path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4" />
+    <path d="M9 18c-4.51 2-5-2-7-2" />
+  </svg>
+);
+
+const LinkedinIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    {...props}
+  >
+    <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z" />
+    <rect width="4" height="12" x="2" y="9" />
+    <circle cx="4" cy="4" r="2" />
+  </svg>
+);
+
+interface Candidate {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+  headline: string;
+  skills: string[];
+  isVerified: boolean;
+  matchScore: number;
+  githubActivity: string;
+  githubUrl: string | null;
+  linkedinUrl: string | null;
+  portfolioUrl: string | null;
+  location: string;
+  bio: string;
+}
+
+interface Stats {
+  totalCandidates: string;
+  verifiedHumans: string;
+  activeJobs: string;
+  shortlisted: string;
+}
 
 export default function RecruiterPage() {
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [stats, setStats] = useState<Stats>({
+    totalCandidates: '0',
+    verifiedHumans: '0',
+    activeJobs: '0',
+    shortlisted: '0',
+  });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load candidates and stats from API
+  const fetchCandidates = async (searchVal = '') => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`/api/recruiter/candidates?search=${encodeURIComponent(searchVal)}`);
+      if (!response.ok) {
+        throw new Error('Failed to load candidates.');
+      }
+      const data = await response.json();
+      setCandidates(data.candidates || []);
+      if (data.stats) {
+        setStats(data.stats);
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error('Could not load candidates list.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Debounced search effect
+  useEffect(() => {
+    const delayDebounce = setTimeout(() => {
+      fetchCandidates(searchQuery);
+    }, 350);
+
+    return () => clearTimeout(delayDebounce);
+  }, [searchQuery]);
+
   return (
     <div className="min-h-screen bg-background page-enter">
-      <div className="max-w-6xl mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-6 py-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
           <div>
-            <h1 className="text-2xl font-bold">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
               Recruiter <span className="text-gradient-accent">Dashboard</span>
             </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Browse verified Web3 talent
+            <p className="text-sm text-muted-foreground mt-1">
+              Browse and contact verified Web3 talent with real-time Proof of Humanity credentials.
             </p>
           </div>
-          <button className="flex items-center gap-2 px-5 py-2.5 rounded-xl gradient-hero text-black font-semibold text-sm hover:shadow-lg hover:shadow-primary/20 transition-all">
+          <button 
+            onClick={() => toast.success('Job posting interface coming soon!')}
+            className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl gradient-hero text-black font-semibold text-sm hover:shadow-lg hover:shadow-primary/20 transition-all cursor-pointer w-full sm:w-auto self-start"
+          >
             <Plus className="w-4 h-4" />
             Post Job
           </button>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        {/* Stats Grid */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {[
-            { label: 'Total Candidates', value: '5,234', icon: Users, color: 'text-blue-400' },
-            { label: 'Verified Humans', value: '3,891', icon: Shield, color: 'text-green-400' },
-            { label: 'Active Jobs', value: '12', icon: Briefcase, color: 'text-purple-400' },
-            { label: 'Shortlisted', value: '28', icon: Star, color: 'text-yellow-400' },
+            { label: 'Total Seeker Profiles', value: stats.totalCandidates, icon: Users, color: 'text-blue-400' },
+            { label: 'Verified Humans (G$)', value: stats.verifiedHumans, icon: Shield, color: 'text-green-400' },
+            { label: 'Active Open Roles', value: stats.activeJobs, icon: Briefcase, color: 'text-purple-400' },
+            { label: 'Shortlists / Applications', value: stats.shortlisted, icon: Star, color: 'text-yellow-400' },
           ].map((stat) => (
             <motion.div
               key={stat.label}
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
-              className="glass rounded-2xl p-4"
+              className="glass rounded-2xl p-4 border border-white/5 bg-white/[0.02]"
             >
               <div className="flex items-center gap-2 mb-2">
                 <stat.icon className={cn('w-4 h-4', stat.color)} />
-                <span className="text-xs text-muted-foreground">{stat.label}</span>
+                <span className="text-xs text-muted-foreground font-medium">{stat.label}</span>
               </div>
-              <p className="text-2xl font-bold">{stat.value}</p>
+              <p className="text-2xl font-bold text-white">{stat.value}</p>
             </motion.div>
           ))}
         </div>
 
-        {/* Search */}
-        <div className="flex gap-3 mb-6">
+        {/* Search & Filtering */}
+        <div className="flex gap-3 mb-8">
           <div className="flex-1 relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
               type="text"
-              placeholder="Search by skills, role, or location..."
-              className="w-full glass rounded-xl pl-11 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/50 bg-transparent"
+              placeholder="Search candidates by name, bio, role/headline, location, or skills..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full glass rounded-xl pl-11 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/40 bg-transparent text-white border border-white/10"
             />
           </div>
-          <button className="p-3 rounded-xl glass hover:bg-white/10 transition-colors">
+          <button 
+            onClick={() => toast.success('Advanced filters coming soon!')}
+            className="p-3 rounded-xl glass hover:bg-white/10 transition-colors border border-white/10 cursor-pointer shrink-0"
+            title="Filter Candidates"
+          >
             <Filter className="w-5 h-5 text-muted-foreground" />
           </button>
         </div>
 
         {/* Candidate Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {mockCandidates.map((candidate, i) => (
-            <motion.div
-              key={candidate.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-              className="glass rounded-2xl p-6 hover:bg-white/5 transition-all cursor-pointer group gradient-border"
-            >
-              <div className="flex items-start gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary/50 to-accent/50 flex items-center justify-center text-xl font-bold shrink-0">
-                  {candidate.name.charAt(0)}
+        {isLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="glass rounded-2xl p-6 border border-white/5 bg-white/[0.01] animate-pulse h-[260px] flex flex-col justify-between">
+                <div className="flex items-start gap-4">
+                  <div className="w-14 h-14 rounded-2xl bg-white/5 shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-white/10 rounded w-2/3" />
+                    <div className="h-3 bg-white/5 rounded w-1/2" />
+                    <div className="h-3 bg-white/5 rounded w-1/3" />
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-bold truncate">{candidate.name}</h3>
-                    {candidate.isVerified && (
-                      <Shield className="w-4 h-4 text-primary shrink-0" />
+                <div className="space-y-2">
+                  <div className="h-3 bg-white/5 rounded w-full" />
+                  <div className="h-3 bg-white/5 rounded w-5/6" />
+                </div>
+                <div className="h-8 bg-white/5 rounded w-full mt-4" />
+              </div>
+            ))}
+          </div>
+        ) : candidates.length === 0 ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center py-16 glass rounded-3xl border border-white/5 bg-white/[0.01]"
+          >
+            <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4 text-2xl text-muted-foreground">
+              🔍
+            </div>
+            <h3 className="text-lg font-bold text-white mb-1">No Candidates Found</h3>
+            <p className="text-sm text-muted-foreground max-w-md mx-auto">
+              Try adjusting your keywords, search terms, or check back later as new Web3 talent verifies their profiles.
+            </p>
+          </motion.div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <AnimatePresence mode="popLayout">
+              {candidates.map((candidate) => (
+                <motion.div
+                  key={candidate.id}
+                  layout
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="glass rounded-2xl p-6 hover:bg-white/[0.04] transition-all duration-300 flex flex-col justify-between border border-white/10 group bg-white/[0.01] hover:border-primary/20 relative"
+                >
+                  <div>
+                    {/* Top Row: Avatar & Match Score */}
+                    <div className="flex items-start justify-between gap-4 mb-4">
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        {candidate.avatarUrl ? (
+                          <img
+                            src={candidate.avatarUrl}
+                            alt={candidate.name}
+                            className="w-14 h-14 rounded-2xl object-cover border border-white/10 shrink-0"
+                          />
+                        ) : (
+                          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary/30 to-accent/30 flex items-center justify-center text-xl font-bold text-white shrink-0">
+                            {candidate.name.charAt(0)}
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <h3 className="font-bold text-white truncate text-base">{candidate.name}</h3>
+                            {candidate.isVerified && (
+                              <div className="text-primary shrink-0" title="GoodDollar Verified Human">
+                                <Shield className="w-4 h-4 fill-primary/10" />
+                              </div>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground font-medium truncate">{candidate.headline}</p>
+                          <p className="text-[11px] text-muted-foreground/60 flex items-center gap-1 mt-0.5">
+                            <MapPin className="w-3 h-3 text-muted-foreground/40 shrink-0" />
+                            {candidate.location}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end shrink-0">
+                        <span className="text-green-400 font-bold text-sm bg-green-500/10 border border-green-500/20 px-2 py-0.5 rounded-full text-xs">
+                          {candidate.matchScore}%
+                        </span>
+                        <span className="text-[9px] text-muted-foreground/50 mt-1">match score</span>
+                      </div>
+                    </div>
+
+                    {/* Bio / Description */}
+                    {candidate.bio && (
+                      <p className="text-xs text-muted-foreground/80 line-clamp-3 leading-relaxed mb-4">
+                        {candidate.bio}
+                      </p>
                     )}
-                  </div>
-                  <p className="text-sm text-muted-foreground truncate">{candidate.headline}</p>
-                  <p className="text-xs text-muted-foreground/60 mt-0.5">{candidate.location}</p>
-                </div>
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-green-500/20 border border-green-500/30 shrink-0">
-                  <span className="text-green-400 font-bold text-sm">{candidate.matchScore}%</span>
-                </div>
-              </div>
 
-              <div className="flex flex-wrap gap-2 mt-4">
-                {candidate.skills.map((skill) => (
-                  <span
-                    key={skill}
-                    className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-xs font-medium text-muted-foreground"
-                  >
-                    {skill}
-                  </span>
-                ))}
-              </div>
-
-              <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
-                <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                  <div className="flex items-center gap-1">
-                    <GitFork className="w-3.5 h-3.5" />
-                    <span>{candidate.githubActivity}</span>
+                    {/* Skills tags */}
+                    <div className="flex flex-wrap gap-1.5 mb-5">
+                      {candidate.skills.slice(0, 5).map((skill) => (
+                        <span
+                          key={skill}
+                          className="px-2 py-0.5 rounded-lg bg-white/5 border border-white/5 text-[10px] font-medium text-muted-foreground"
+                        >
+                          {skill}
+                        </span>
+                      ))}
+                      {candidate.skills.length > 5 && (
+                        <span className="px-2 py-0.5 rounded-lg bg-white/5 border border-white/5 text-[10px] font-medium text-muted-foreground/60">
+                          +{candidate.skills.length - 5} more
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button className="px-3 py-1.5 rounded-lg glass hover:bg-white/10 text-xs font-medium transition-colors">
-                    <MessageSquare className="w-3.5 h-3.5" />
-                  </button>
-                  <button className="px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20 hover:bg-primary/20 text-xs font-medium text-primary transition-colors">
-                    Shortlist
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </div>
+
+                  {/* Actions / Links footer */}
+                  <div className="flex items-center justify-between pt-3 border-t border-white/5 mt-auto">
+                    {/* Socials / External links */}
+                    <div className="flex items-center gap-2">
+                      {candidate.githubUrl && (
+                        <a
+                          href={candidate.githubUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 text-muted-foreground hover:text-white transition-colors"
+                          title="View GitHub"
+                        >
+                          <GithubIcon className="w-3.5 h-3.5" />
+                        </a>
+                      )}
+                      {candidate.linkedinUrl && (
+                        <a
+                          href={candidate.linkedinUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 text-muted-foreground hover:text-white transition-colors"
+                          title="View LinkedIn"
+                        >
+                          <LinkedinIcon className="w-3.5 h-3.5" />
+                        </a>
+                      )}
+                    </div>
+
+                    {/* Recruiter interaction buttons */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => toast.success(`Chat session with ${candidate.name} is starting...`)}
+                        className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 text-muted-foreground hover:text-white transition-colors cursor-pointer"
+                        title="Send Message"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => toast.success(`Shortlisted ${candidate.name}!`)}
+                        className="px-3.5 py-1.5 rounded-lg bg-primary/10 border border-primary/20 hover:bg-primary/20 text-xs font-semibold text-primary transition-colors cursor-pointer"
+                      >
+                        Shortlist
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+        )}
       </div>
     </div>
   );

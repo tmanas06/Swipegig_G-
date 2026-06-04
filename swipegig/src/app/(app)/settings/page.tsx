@@ -53,8 +53,6 @@ export default function SettingsPage() {
     error: checkError,
   } = useCheckGoodDollarStatus();
 
-  const [addressInput, setAddressInput] = useState('');
-  const [addressError, setAddressError] = useState<string | null>(null);
   const [verifyStep, setVerifyStep] = useState<'idle' | 'verifying'>('idle');
   const [showReVerify, setShowReVerify] = useState(false);
 
@@ -227,21 +225,10 @@ export default function SettingsPage() {
   };
 
   const handleCheckVerification = () => {
-    setAddressError(null);
-    const trimmed = addressInput.trim();
-    if (!trimmed) {
-      setAddressError('Please enter a wallet address.');
-      return;
-    }
-    if (!/^0x[a-fA-F0-9]{40}$/.test(trimmed)) {
-      setAddressError('Please enter a valid wallet address (0x...)');
-      return;
-    }
-    checkStatus(trimmed, {
+    checkStatus(undefined, {
       onSuccess: (data) => {
         if (data.verified) {
           toast.success('Successfully verified with GoodDollar!');
-          setAddressInput('');
           setVerifyStep('idle');
           setShowReVerify(false);
         } else {
@@ -313,7 +300,7 @@ export default function SettingsPage() {
                         <div className="glass rounded-xl px-4 py-3">
                           <p className="text-xs text-muted-foreground mb-1">Wallet</p>
                           <p className="font-mono text-xs truncate">
-                            {goodDollarAddress ? `${goodDollarAddress.slice(0, 8)}...${goodDollarAddress.slice(-6)}` : '—'}
+                            {storeUser?.walletAddress ? `${storeUser.walletAddress.slice(0, 8)}...${storeUser.walletAddress.slice(-6)}` : '—'}
                           </p>
                         </div>
                         <div className="glass rounded-xl px-4 py-3">
@@ -330,7 +317,7 @@ export default function SettingsPage() {
                           }}
                           className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-white/10 hover:bg-white/5 text-sm font-medium transition-all cursor-pointer"
                         >
-                          {isExpiringSoon ? 'Re-verify with GoodWallet' : 'Update GoodWallet Address'}
+                          {isExpiringSoon ? 'Re-verify with GoodWallet' : 'Re-verify Identity'}
                         </button>
                       )}
                     </div>
@@ -389,7 +376,7 @@ export default function SettingsPage() {
                         <p className="text-sm text-white mb-3">Complete face verification in GoodWallet</p>
                         <button
                           onClick={() => {
-                            window.open(GOODDOLLAR_WALLET_URL, '_blank');
+                            window.open('https://codesandbox.io/embed/h3n3kp?view=preview&hidenavigation=1&hideexplorer=1', '_blank');
                             setVerifyStep('verifying');
                           }}
                           className="w-full inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl border border-green-500/30 hover:border-green-500/50 hover:bg-green-500/5 text-green-400 font-semibold text-sm transition-all cursor-pointer"
@@ -398,7 +385,7 @@ export default function SettingsPage() {
                         </button>
                       </div>
 
-                      {/* Step 2 */}
+                      {/* Step 2 — just a button, no address input needed */}
                       {verifyStep === 'verifying' && (
                         <motion.div
                           initial={{ opacity: 0, height: 0 }}
@@ -406,37 +393,13 @@ export default function SettingsPage() {
                           className="text-left w-full space-y-3 pt-2"
                         >
                           <p className="text-xs uppercase tracking-wider text-gray-500 font-bold mb-1">── Step 2 ──</p>
-                          <label htmlFor="settings-address-input" className="block text-sm text-white font-medium">
-                            Enter your GoodWallet address
-                          </label>
-                          <input
-                            id="settings-address-input"
-                            type="text"
-                            placeholder="0x..."
-                            value={addressInput}
-                            onChange={(e) => {
-                              setAddressInput(e.target.value);
-                              if (addressError) setAddressError(null);
-                            }}
-                            className={`w-full glass rounded-xl px-4 py-3 text-sm font-mono text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-green-500/30 ${
-                              addressError || checkResult === 'not_verified'
-                                ? 'border border-red-500/40 focus:ring-red-500/20'
-                                : checkResult === 'expired'
-                                ? 'border border-amber-500/40 focus:ring-amber-500/20'
-                                : 'border border-white/10'
-                            }`}
-                            autoComplete="off"
-                            autoCorrect="off"
-                            autoCapitalize="off"
-                            spellCheck={false}
-                          />
-                          <p className="text-[11px] text-gray-500">
-                            Find this: GoodWallet → Settings → My Address
+                          <p className="text-sm text-white mb-2">
+                            After completing face verification, click below to link it.
                           </p>
 
                           <button
                             onClick={handleCheckVerification}
-                            disabled={!addressInput.trim() || isChecking}
+                            disabled={isChecking}
                             className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 text-white font-semibold text-sm hover:shadow-lg hover:shadow-green-500/20 disabled:opacity-40 disabled:hover:shadow-none disabled:cursor-not-allowed transition-all cursor-pointer"
                           >
                             {isChecking ? (
@@ -453,10 +416,6 @@ export default function SettingsPage() {
                           </button>
 
                           {/* Error/Result Feedbacks */}
-                          {addressError && (
-                            <p className="text-xs text-red-500 mt-1.5">{addressError}</p>
-                          )}
-
                           {checkResult === 'not_verified' && checkMessage && (
                             <p className="text-xs text-red-500 mt-1.5 leading-relaxed">{checkMessage}</p>
                           )}
@@ -469,6 +428,39 @@ export default function SettingsPage() {
                             <p className="text-xs text-red-500 mt-1.5 leading-relaxed">{checkError.message}</p>
                           )}
                         </motion.div>
+                      )}
+
+                      {storeUser?.walletAddress && (
+                        <div className="w-full mt-4 p-4 rounded-xl bg-white/[0.03] border border-white/10 text-left space-y-2">
+                          <div>
+                            <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Your SwipeGig Wallet address</p>
+                            <div className="flex items-center justify-between gap-2 mt-1">
+                              <code className="text-xs font-mono text-green-400 break-all">{storeUser.walletAddress}</code>
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(storeUser.walletAddress!);
+                                  toast.success('Address copied!');
+                                }}
+                                className="text-xs text-green-400 hover:text-green-300 font-semibold underline cursor-pointer shrink-0"
+                              >
+                                Copy
+                              </button>
+                            </div>
+                          </div>
+                          <div className="pt-2 border-t border-white/5">
+                            <p className="text-[11px] text-muted-foreground leading-relaxed">
+                              Already verified in GoodWallet on another account? Do not scan again. Instead, link this SwipeGig address using the{' '}
+                              <a
+                                href="https://codesandbox.io/embed/h3n3kp?view=preview&hidenavigation=1&hideexplorer=1"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-green-400 hover:underline font-semibold"
+                              >
+                                GoodDollar Connect Account Tool →
+                              </a>
+                            </p>
+                          </div>
+                        </div>
                       )}
                     </div>
                   )}

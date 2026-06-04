@@ -7,9 +7,7 @@ import { useGoodDollarVerification } from '@/hooks/useGoodDollarVerification';
 import { useCheckGoodDollarStatus } from '@/hooks/useCheckGoodDollarStatus';
 
 import { useWallets } from '@privy-io/react-auth';
-import { createPublicClient, createWalletClient, custom, http } from 'viem';
-import { celo } from 'viem/chains';
-import { IdentitySDK } from '@goodsdks/citizen-sdk';
+import { toast } from 'react-hot-toast';
 
 const descriptions = {
   wallet: 'Access your G$ wallet and track your token earnings',
@@ -29,83 +27,35 @@ export default function GoodDollarVerifyGate({ children, feature }: GoodDollarVe
   const { wallets } = useWallets();
 
   const [step, setStep] = useState<'idle' | 'verifying' | 'checking'>('idle');
-  const [addressInput, setAddressInput] = useState('');
-  const [addressError, setAddressError] = useState<string | null>(null);
+  const [checkError, setCheckError] = useState<string | null>(null);
   const [checkResult, setCheckResult] = useState<'verified' | 'not_verified' | 'expired' | null>(null);
   const [resultMessage, setResultMessage] = useState<string | null>(null);
 
-  const handleOpenWallet = async () => {
-    try {
-      const activeWallet = wallets[0];
-      if (!activeWallet) {
-        // Fallback if no wallet is connected
-        window.open('https://wallet.gooddollar.org', '_blank');
-        setStep('verifying');
-        return;
-      }
+  const activeWallet = wallets[0];
 
-      const publicClient = createPublicClient({
-        chain: celo,
-        transport: http('https://forno.celo.org'),
-      });
-
-      const ethereumProvider = await activeWallet.getEthereumProvider();
-      const walletClient = createWalletClient({
-        account: activeWallet.address as `0x${string}`,
-        chain: celo,
-        transport: custom(ethereumProvider),
-      });
-
-      const identitySDK = await IdentitySDK.init({
-        publicClient: publicClient as any,
-        walletClient: walletClient as any,
-        env: 'production',
-      });
-
-      const callbackUrl = `${window.location.origin}/verify/callback?verified=true`;
-      const fvLink = await identitySDK.generateFVLink(
-        false, // popupMode
-        callbackUrl
-      );
-
-      window.open(fvLink, '_blank');
-      setStep('verifying');
-    } catch (error) {
-      console.error('Failed to generate FV link:', error);
-      // Fallback
-      window.open('https://wallet.gooddollar.org', '_blank');
-      setStep('verifying');
-    }
+  const handleOpenWallet = () => {
+    // Open the GoodDollar Connect Account Tool directly in a new tab
+    window.open('https://codesandbox.io/embed/h3n3kp?view=preview&hidenavigation=1&hideexplorer=1', '_blank');
+    setStep('verifying');
   };
 
   const handleCheck = () => {
-    setAddressError(null);
+    setCheckError(null);
     setResultMessage(null);
     setCheckResult(null);
 
-    const trimmed = addressInput.trim();
-    if (!trimmed) {
-      setAddressError('Please enter a wallet address.');
-      return;
-    }
-
-    if (!/^0x[a-fA-F0-9]{40}$/.test(trimmed)) {
-      setAddressError('Please enter a valid wallet address (0x...)');
-      return;
-    }
-
-    checkStatus(trimmed, {
+    checkStatus(undefined, {
       onSuccess: (data) => {
         if (data.verified) {
           setCheckResult('verified');
-          setResultMessage(data.message || 'Verification successful!');
+          setResultMessage('Verification successful! Your identity is now linked.');
         } else {
           setCheckResult(data.reason as 'not_verified' | 'expired');
           setResultMessage(data.message || 'Could not verify.');
         }
       },
       onError: (err) => {
-        setAddressError(err.message || 'Could not reach GoodDollar network.');
+        setCheckError(err.message || 'Could not reach GoodDollar network.');
       },
     });
   };
@@ -133,9 +83,9 @@ export default function GoodDollarVerifyGate({ children, feature }: GoodDollarVe
   }
 
   return (
-    <div className="relative min-h-[450px] overflow-hidden rounded-3xl">
+    <div className="relative w-full min-h-screen">
       {/* Blurred children preview */}
-      <div className="blur-md opacity-35 pointer-events-none select-none" aria-hidden>
+      <div className="blur-md opacity-35 pointer-events-none select-none w-full h-full" aria-hidden>
         {children}
       </div>
 
@@ -160,7 +110,7 @@ export default function GoodDollarVerifyGate({ children, feature }: GoodDollarVe
             {/* Step 1 */}
             <div className="text-left w-full">
               <p className="text-xs uppercase tracking-wider text-gray-500 font-bold mb-2">── Step 1 ──</p>
-              <p className="text-sm text-white mb-3">Complete face verification</p>
+              <p className="text-sm text-white mb-3">Complete face verification on GoodWallet</p>
               <button
                 onClick={handleOpenWallet}
                 className="w-full inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl border border-green-500/30 hover:border-green-500/50 hover:bg-green-500/5 text-green-400 font-semibold text-sm transition-all cursor-pointer"
@@ -169,7 +119,7 @@ export default function GoodDollarVerifyGate({ children, feature }: GoodDollarVe
               </button>
             </div>
 
-            {/* Step 2 */}
+            {/* Step 2 — just a button, no address input */}
             {step === 'verifying' && (
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
@@ -177,39 +127,13 @@ export default function GoodDollarVerifyGate({ children, feature }: GoodDollarVe
                 className="text-left w-full space-y-3"
               >
                 <p className="text-xs uppercase tracking-wider text-gray-500 font-bold mb-1">── Step 2 ──</p>
-                <label htmlFor={`${feature}-address-input`} className="block text-sm text-white font-medium">
-                  Enter your GoodWallet address
-                </label>
-                <div className="relative">
-                  <input
-                    id={`${feature}-address-input`}
-                    type="text"
-                    placeholder="0x..."
-                    value={addressInput}
-                    onChange={(e) => {
-                      setAddressInput(e.target.value);
-                      if (addressError) setAddressError(null);
-                    }}
-                    className={`w-full glass rounded-xl px-4 py-3 text-sm font-mono text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-green-500/30 ${
-                      addressError || checkResult === 'not_verified'
-                        ? 'border border-red-500/40 focus:ring-red-500/20'
-                        : checkResult === 'expired'
-                        ? 'border border-amber-500/40 focus:ring-amber-500/20'
-                        : 'border border-white/10'
-                    }`}
-                    autoComplete="off"
-                    autoCorrect="off"
-                    autoCapitalize="off"
-                    spellCheck={false}
-                  />
-                </div>
-                <p className="text-[11px] text-gray-500">
-                  Find this: GoodWallet → Settings → My Address
+                <p className="text-sm text-white mb-2">
+                  After completing face verification, click below to link it.
                 </p>
 
                 <button
                   onClick={handleCheck}
-                  disabled={!addressInput.trim() || isPending}
+                  disabled={isPending}
                   className="w-full flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 text-white font-semibold text-sm hover:shadow-lg hover:shadow-green-500/20 disabled:opacity-40 disabled:hover:shadow-none disabled:cursor-not-allowed transition-all cursor-pointer"
                 >
                   {isPending ? (
@@ -225,9 +149,13 @@ export default function GoodDollarVerifyGate({ children, feature }: GoodDollarVe
                   )}
                 </button>
 
-                {/* Error/Result Feedbacks */}
-                {addressError && (
-                  <p className="text-xs text-red-500 mt-1.5">{addressError}</p>
+                {/* Feedback messages */}
+                {checkError && (
+                  <p className="text-xs text-red-500 mt-1.5">{checkError}</p>
+                )}
+
+                {checkResult === 'verified' && resultMessage && (
+                  <p className="text-xs text-green-400 mt-1.5 leading-relaxed">{resultMessage}</p>
                 )}
 
                 {checkResult === 'not_verified' && resultMessage && (
@@ -237,9 +165,43 @@ export default function GoodDollarVerifyGate({ children, feature }: GoodDollarVe
                 {checkResult === 'expired' && resultMessage && (
                   <p className="text-xs text-amber-500 mt-1.5 leading-relaxed">{resultMessage}</p>
                 )}
+
               </motion.div>
             )}
           </div>
+
+          {activeWallet && (
+            <div className="w-full mt-6 p-4 rounded-2xl bg-white/[0.03] border border-white/5 text-left space-y-2.5">
+              <div>
+                <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Your SwipeGig Wallet address</p>
+                <div className="flex items-center justify-between gap-2 mt-1">
+                  <code className="text-xs font-mono text-green-400 break-all">{activeWallet.address}</code>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(activeWallet.address);
+                      toast.success('Address copied!');
+                    }}
+                    className="text-xs text-green-400 hover:text-green-300 font-semibold underline cursor-pointer shrink-0"
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
+              <div className="pt-2.5 border-t border-white/5">
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Already verified in GoodWallet on another account? Do not scan again. Instead, link this SwipeGig address using the{' '}
+                  <a
+                    href="https://codesandbox.io/embed/h3n3kp?view=preview&hidenavigation=1&hideexplorer=1"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-green-400 hover:underline font-semibold"
+                  >
+                    GoodDollar Connect Account Tool →
+                  </a>
+                </p>
+              </div>
+            </div>
+          )}
 
           <p className="text-[10px] text-gray-500 mt-6 select-none">
             Takes ~2 min · Free forever

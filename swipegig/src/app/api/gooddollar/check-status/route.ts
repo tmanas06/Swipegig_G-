@@ -1,12 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { checkGoodDollarVerification, isValidEthAddress } from '@/lib/gooddollar/identity';
-import { Prisma } from '@prisma/client';
-
-const checkStatusSchema = z.object({
-  goodWalletAddress: z.string().min(1),
-});
+import { checkGoodDollarVerification } from '@/lib/gooddollar/identity';
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,28 +13,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. Parse + validate request body
-    const body = await request.json();
-    const parsed = checkStatusSchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: 'Invalid request', message: 'Please enter a valid wallet address (0x...)' },
-        { status: 400 }
-      );
-    }
-
-    const { goodWalletAddress } = parsed.data;
-
-    // Validate Ethereum address format
-    if (!isValidEthAddress(goodWalletAddress)) {
-      return NextResponse.json(
-        { error: 'Invalid address format', message: 'Please enter a valid wallet address (0x...)' },
-        { status: 400 }
-      );
-    }
-
-    // Find current user in DB
-    const user = await prisma.user.findUnique({
+    // 2. Find current user in DB — we check THEIR Privy wallet, no input needed
+    const dbUser = await prisma.user.findUnique({
       where: { privyId: privyUserId },
       select: {
         id: true,
@@ -49,10 +23,20 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    if (!user) {
+    if (!dbUser) {
       return NextResponse.json(
         { error: 'User not found', message: 'Redirect to login' },
         { status: 401 }
+      );
+    }
+
+    if (!dbUser.walletAddress) {
+      return NextResponse.json(
+        {
+          error: 'No wallet',
+          message: 'No embedded wallet found on your account. Please log out and log back in.',
+        },
+        { status: 400 }
       );
     }
 
@@ -63,13 +47,13 @@ export async function POST(request: NextRequest) {
     const [, checkCount] = await prisma.$transaction([
       prisma.verificationCheckLog.deleteMany({
         where: {
-          userId: user.id,
+          userId: dbUser.id,
           checkedAt: { lt: pruneThreshold },
         },
       }),
       prisma.verificationCheckLog.count({
         where: {
-          userId: user.id,
+          userId: dbUser.id,
           checkedAt: { gte: limitWindowStart },
         },
       }),
@@ -88,30 +72,14 @@ export async function POST(request: NextRequest) {
     // Record the current check attempt in the rate limit logs
     await prisma.verificationCheckLog.create({
       data: {
-        userId: user.id,
+        userId: dbUser.id,
       },
     });
 
-    // 4. Check uniqueness — another user may have this address
-    const existingUser = await prisma.user.findFirst({
-      where: {
-        goodDollarAddress: goodWalletAddress,
-        NOT: { id: user.id },
-      },
-    });
-
-    if (existingUser) {
-      return NextResponse.json({
-        verified: false,
-        reason: 'address_taken',
-        message: 'This GoodWallet address is already linked to another SwipeGig account.',
-      });
-    }
-
-    // 5. Query GoodDollar contract status on Celo
+    // 4. Query GoodDollar contract status on Celo using the user's OWN Privy wallet address
     let verification;
     try {
-      verification = await checkGoodDollarVerification(goodWalletAddress);
+      verification = await checkGoodDollarVerification(dbUser.walletAddress);
     } catch (contractError) {
       console.error('[GOODDOLLAR_RPC_ERROR]', contractError);
       return NextResponse.json(
@@ -122,52 +90,35 @@ export async function POST(request: NextRequest) {
 
     const { isWhitelisted, lastAuthenticated, isExpired, expiresAt } = verification;
 
-    // 6. Whitelisted & Not Expired -> Verify User
+    // 5. Whitelisted & Not Expired -> Verify User
     if (isWhitelisted && !isExpired) {
-      try {
-        await prisma.user.update({
-          where: { id: user.id },
-          data: {
-            isGoodDollarVerified: true,
-            isVerified: true, // legacy badge/score trigger
-            goodDollarVerifiedAt: new Date(),
-            goodDollarAddress: goodWalletAddress,
-            lastAuthenticatedAt: lastAuthenticated > 0
-              ? new Date(lastAuthenticated * 1000)
-              : null,
-            verificationExpiredAt: expiresAt ? new Date(expiresAt * 1000) : null,
-            aiPromptsLimit: 999999,
-          },
-        });
-      } catch (dbError) {
-        // Handle unique constraint error: goodDollarAddress must be unique
-        if (dbError instanceof Prisma.PrismaClientKnownRequestError && dbError.code === 'P2002') {
-          return NextResponse.json(
-            {
-              error: 'Already linked',
-              message: 'This GoodWallet address is already linked to another SwipeGig account.',
-            },
-            { status: 400 }
-          );
-        }
-        throw dbError;
-      }
+      await prisma.user.update({
+        where: { id: dbUser.id },
+        data: {
+          isGoodDollarVerified: true,
+          isVerified: true, // legacy badge/score trigger
+          goodDollarVerifiedAt: new Date(),
+          lastAuthenticatedAt: lastAuthenticated > 0
+            ? new Date(lastAuthenticated * 1000)
+            : null,
+          verificationExpiredAt: expiresAt ? new Date(expiresAt * 1000) : null,
+          aiPromptsLimit: 999999,
+        },
+      });
 
       return NextResponse.json({
         verified: true,
-        goodDollarAddress: goodWalletAddress,
         lastAuthenticated,
         expiresAt,
       });
     }
 
-    // 7. Whitelisted & Expired
+    // 6. Whitelisted & Expired
     if (isWhitelisted && isExpired) {
       await prisma.user.update({
-        where: { id: user.id },
+        where: { id: dbUser.id },
         data: {
           isGoodDollarVerified: false,
-          goodDollarAddress: goodWalletAddress, // store it anyway
           lastAuthenticatedAt: lastAuthenticated > 0
             ? new Date(lastAuthenticated * 1000)
             : null,
@@ -183,11 +134,11 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 8. Not Whitelisted
+    // 7. Not Whitelisted
     return NextResponse.json({
       verified: false,
       reason: 'not_verified',
-      message: 'No face verification found for this address. Make sure you completed verification in GoodWallet and entered the correct address.',
+      message: 'No face verification found. Make sure you completed the GoodWallet face verification — it links to your embedded wallet automatically via connectAccount().',
     });
   } catch (error: unknown) {
     console.error('[GOODDOLLAR_CHECK_STATUS_ROUTE_ERROR]', error);

@@ -7,7 +7,6 @@ interface CheckStatusResponse {
   verified: boolean;
   reason?: string;
   message?: string;
-  goodDollarAddress?: string;
   expiresAt?: number | null;
   error?: string;
 }
@@ -16,15 +15,15 @@ export function useCheckGoodDollarStatus() {
   const { user } = usePrivy();
   const queryClient = useQueryClient();
 
-  const mutation = useMutation<CheckStatusResponse, Error, string>({
-    mutationFn: async (goodWalletAddress: string) => {
+  const mutation = useMutation<CheckStatusResponse, Error, void>({
+    mutationFn: async () => {
       const response = await fetch('/api/gooddollar/check-status', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-privy-user-id': user?.id ?? '',
         },
-        body: JSON.stringify({ goodWalletAddress }),
+        body: JSON.stringify({}),
       });
 
       const resData = await response.json();

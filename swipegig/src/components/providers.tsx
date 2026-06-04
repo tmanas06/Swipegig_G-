@@ -99,28 +99,6 @@ export default function Providers({ children }: { children: ReactNode }) {
                 },
               },
             },
-            {
-              id: 11142220,
-              name: 'Celo Sepolia Testnet',
-              network: 'celo-sepolia',
-              nativeCurrency: {
-                name: 'CELO',
-                symbol: 'CELO',
-                decimals: 18,
-              },
-              rpcUrls: {
-                default: {
-                  http: ['https://forno.celo-sepolia.celo-testnet.org'],
-                },
-              },
-              blockExplorers: {
-                default: {
-                  name: 'Blockscout',
-                  url: 'https://celo-sepolia.blockscout.com',
-                },
-              },
-              testnet: true,
-            },
           ],
         }}
       >

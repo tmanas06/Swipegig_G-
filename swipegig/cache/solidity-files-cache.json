@@ -836,6 +836,45 @@
       "artifacts": [
         "IERC20"
       ]
+    },
+    "/Users/manas/Desktop/Swipegig_G-/swipegig/contracts/SwipeGigCreatorPool.sol": {
+      "lastModificationDate": 1780722115313,
+      "contentHash": "984949ece6e676e36ffef205bb338215",
+      "sourceName": "contracts/SwipeGigCreatorPool.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "@openzeppelin/contracts/access/Ownable.sol",
+        "@openzeppelin/contracts/token/ERC20/IERC20.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "SwipeGigCreatorPool"
+      ]
     }
   }
 }

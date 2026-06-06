@@ -53,12 +53,21 @@ async function main() {
   console.log("");
 
   // 4. Deploy SwipeGigWelcomeNFT
-  console.log("━━━ [4/4] Deploying SwipeGigWelcomeNFT ━━━");
+  console.log("━━━ [4/5] Deploying SwipeGigWelcomeNFT ━━━");
   const SwipeGigWelcomeNFT = await hre.ethers.getContractFactory("SwipeGigWelcomeNFT");
   const nft = await SwipeGigWelcomeNFT.deploy(BACKEND_SIGNER, NFT_BASE_URI);
   await nft.waitForDeployment();
   const nftAddress = await nft.getAddress();
   console.log("✅ SwipeGigWelcomeNFT deployed to:", nftAddress);
+  console.log("");
+
+  // 5. Deploy SwipeGigCreatorPool
+  console.log("━━━ [5/5] Deploying SwipeGigCreatorPool ━━━");
+  const SwipeGigCreatorPool = await hre.ethers.getContractFactory("SwipeGigCreatorPool");
+  const creatorPool = await SwipeGigCreatorPool.deploy(DEV_G_TOKEN, BACKEND_SIGNER);
+  await creatorPool.waitForDeployment();
+  const creatorPoolAddress = await creatorPool.getAddress();
+  console.log("✅ SwipeGigCreatorPool deployed to:", creatorPoolAddress);
   console.log("");
 
   // Summary
@@ -73,6 +82,7 @@ async function main() {
   console.log(`APPLICATIONS_CONTRACT_ADDRESS=${applicationsAddress}`);
   console.log(`POOL_CONTRACT_ADDRESS=${poolAddress}`);
   console.log(`WELCOME_NFT_CONTRACT_ADDRESS=${nftAddress}`);
+  console.log(`CREATOR_POOL_CONTRACT_ADDRESS=${creatorPoolAddress}`);
   console.log(`NEXT_PUBLIC_DEV_G_TOKEN=${DEV_G_TOKEN}`);
   console.log("─────────────────────────────────────────────────────");
   console.log("");
@@ -81,6 +91,7 @@ async function main() {
   console.log(`   SwipeGigApplications: https://celoscan.io/address/${applicationsAddress}`);
   console.log(`   SwipeGigPool:         https://celoscan.io/address/${poolAddress}`);
   console.log(`   SwipeGigWelcomeNFT:   https://celoscan.io/address/${nftAddress}`);
+  console.log(`   SwipeGigCreatorPool:  https://celoscan.io/address/${creatorPoolAddress}`);
   console.log("");
   console.log("💰 Next steps:");
   console.log("   1. Claim dev G$ at: https://dev.gooddapp.org");

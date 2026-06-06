@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/marketplace/weekly-bonus",
+      "schedule": "0 0 * * 1"
+    }
+  ]
+}

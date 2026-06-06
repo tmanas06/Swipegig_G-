@@ -16,6 +16,8 @@ import {
   Sparkles,
   X,
   Loader2,
+  Briefcase,
+  Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
@@ -43,8 +45,9 @@ const steps = [
 export default function OnboardingPage() {
   const router = useRouter();
   const { authenticated, login, user } = usePrivy();
-  const { setOnboarded } = useUserStore();
+  const { setOnboarded, setUser } = useUserStore();
   const [currentStep, setCurrentStep] = useState(authenticated ? 1 : 0);
+  const [userRole, setUserRole] = useState<'SEEKER' | 'RECRUITER'>('SEEKER');
   const [profileData, setProfileData] = useState({
     name: '',
     headline: '',
@@ -62,7 +65,7 @@ export default function OnboardingPage() {
     }
 
     try {
-      // 1. Update text fields and skills
+      // 1. Update text fields, skills, and role
       const updateResponse = await fetch('/api/profile/update', {
         method: 'PUT',
         headers: {
@@ -75,11 +78,17 @@ export default function OnboardingPage() {
           bio: profileData.bio,
           location: profileData.location,
           skills: selectedSkills,
+          role: userRole,
         }),
       });
 
       if (!updateResponse.ok) {
         throw new Error('Failed to update profile');
+      }
+
+      const updateData = await updateResponse.json();
+      if (updateData.user) {
+        setUser(updateData.user);
       }
 
       // 2. Upload resume if selected
@@ -102,6 +111,7 @@ export default function OnboardingPage() {
         const data = await uploadResponse.json();
         // Pre-fill profile fields if they were extracted by AI and not yet entered manually
         if (data.user) {
+          setUser(data.user);
           setProfileData({
             name: data.user.name || profileData.name,
             headline: data.user.profile?.headline || profileData.headline,
@@ -252,6 +262,45 @@ export default function OnboardingPage() {
                 <h2 className="text-2xl font-bold mb-2">Tell us about yourself</h2>
                 <p className="text-muted-foreground mb-8">This helps us match you with the right jobs.</p>
                 <div className="space-y-5">
+                  <div>
+                    <label className="text-sm font-medium mb-3 block">I want to use SwipeGig as:</label>
+                    <div className="grid grid-cols-2 gap-4">
+                      <button
+                        type="button"
+                        onClick={() => setUserRole('SEEKER')}
+                        className={cn(
+                          'p-4 rounded-2xl border text-left flex flex-col gap-3 transition-all cursor-pointer',
+                          userRole === 'SEEKER'
+                            ? 'bg-primary/15 border-primary text-primary hover:bg-primary/20'
+                            : 'glass border-white/10 text-muted-foreground hover:bg-white/5 hover:text-white'
+                        )}
+                      >
+                        <Users className="w-5 h-5 shrink-0" />
+                        <div>
+                          <p className="text-sm font-bold">Talent / Contributor</p>
+                          <p className="text-[10px] opacity-70 mt-0.5 leading-normal">I am looking for Web3 job opportunities</p>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setUserRole('RECRUITER')}
+                        className={cn(
+                          'p-4 rounded-2xl border text-left flex flex-col gap-3 transition-all cursor-pointer',
+                          userRole === 'RECRUITER'
+                            ? 'bg-primary/15 border-primary text-primary hover:bg-primary/20'
+                            : 'glass border-white/10 text-muted-foreground hover:bg-white/5 hover:text-white'
+                        )}
+                      >
+                        <Briefcase className="w-5 h-5 shrink-0" />
+                        <div>
+                          <p className="text-sm font-bold">Founders / HR</p>
+                          <p className="text-[10px] opacity-70 mt-0.5 leading-normal">I want to hire Web3 builders</p>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+
                   <div>
                     <label className="text-sm font-medium mb-2 block">Full Name</label>
                     <input

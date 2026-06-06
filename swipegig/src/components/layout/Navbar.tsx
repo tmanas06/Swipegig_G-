@@ -20,6 +20,7 @@ import {
   ChevronRight,
   ShieldCheck,
   Sparkles,
+  Compass,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUserStore } from '@/stores/useUserStore';
@@ -32,6 +33,7 @@ const navItems = [
   { href: '/profile', label: 'Profile', icon: User, color: 'text-blue-400' },
   { href: '/applications', label: 'Applications', icon: Briefcase, color: 'text-orange-400' },
   { href: '/coach', label: 'AI Coach', icon: MessageSquare, color: 'text-purple-400' },
+  { href: '/marketplace', label: 'Marketplace', icon: Compass, color: 'text-sky-400' },
   { href: '/rewards', label: 'Rewards', icon: Gift, color: 'text-yellow-400' },
   { href: '/wallet', label: 'Wallet', icon: Wallet, color: 'text-emerald-400' },
   { href: '/recruiter', label: 'Recruiter', icon: LayoutGrid, color: 'text-cyan-400' },
@@ -166,9 +168,15 @@ export default function Navbar() {
     }
   }, [searchParams, router]);
 
-  // Build nav items dynamically — include Admin only for admin users
+  // Build nav items dynamically — include Admin only for admin users, and Recruiter only for Recruiter/Admin roles
+  const isRecruiterOrAdmin = storeUser?.role === 'RECRUITER' || storeUser?.role === 'ADMIN';
+  const filteredNavItems = navItems.filter((item) => {
+    if (item.href === '/recruiter') return isRecruiterOrAdmin;
+    return true;
+  });
+
   const allNavItems = [
-    ...navItems,
+    ...filteredNavItems,
     ...(isAdmin ? [{ href: '/admin', label: 'Admin', icon: ShieldCheck, color: 'text-red-400' }] : []),
   ];
 

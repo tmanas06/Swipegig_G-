@@ -21,6 +21,8 @@ import {
   Loader2,
   MapPin,
   FileText,
+  X,
+  Send,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
@@ -92,6 +94,85 @@ export default function RecruiterPage() {
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+
+  // Chat drawer states
+  const [activeChatCandidate, setActiveChatCandidate] = useState<Candidate | null>(null);
+  const [chatMessages, setChatMessages] = useState<{ id: string; sender: 'me' | 'them'; text: string; timestamp: Date }[]>([]);
+  const [newMessageText, setNewMessageText] = useState('');
+  const [isCandidateTyping, setIsCandidateTyping] = useState(false);
+
+  const handleOpenChat = (candidate: Candidate) => {
+    setActiveChatCandidate(candidate);
+    setIsCandidateTyping(false);
+    setNewMessageText('');
+    
+    const saved = localStorage.getItem(`swipegig-chat-${candidate.id}`);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setChatMessages(parsed.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) })));
+      } catch (e) {
+        initializeMockChat(candidate);
+      }
+    } else {
+      initializeMockChat(candidate);
+    }
+  };
+
+  const initializeMockChat = (candidate: Candidate) => {
+    const starterMessages = [
+      {
+        id: '1',
+        sender: 'them' as const,
+        text: `Hey! Thanks for viewing my profile. I saw your post looking for a ${candidate.headline || 'Web3 builder'}. I am highly interested in the role!`,
+        timestamp: new Date(Date.now() - 3600000), // 1 hour ago
+      }
+    ];
+    setChatMessages(starterMessages);
+    localStorage.setItem(`swipegig-chat-${candidate.id}`, JSON.stringify(starterMessages));
+  };
+
+  const handleSendMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMessageText.trim() || !activeChatCandidate) return;
+
+    const myMsg = {
+      id: Date.now().toString(),
+      sender: 'me' as const,
+      text: newMessageText,
+      timestamp: new Date(),
+    };
+
+    const updatedMessages = [...chatMessages, myMsg];
+    setChatMessages(updatedMessages);
+    localStorage.setItem(`swipegig-chat-${activeChatCandidate.id}`, JSON.stringify(updatedMessages));
+    setNewMessageText('');
+
+    setIsCandidateTyping(true);
+    setTimeout(() => {
+      setIsCandidateTyping(false);
+      
+      const candidateReplies = [
+        `That sounds like a great project! I have experience with ${activeChatCandidate.skills.slice(0, 3).join(', ')} which fits perfectly.`,
+        "I'd love to jump on a quick call to sync next week. When are you free?",
+        "Yes, my GitHub activity reflects my recent work on smart contract security and optimization. I'm excited about this opportunity!",
+        "Thanks for the details! I am available to start immediately and work remotely. Let me know the next steps.",
+      ];
+      
+      const randomReply = candidateReplies[Math.floor(Math.random() * candidateReplies.length)];
+      
+      const replyMsg = {
+        id: (Date.now() + 1).toString(),
+        sender: 'them' as const,
+        text: randomReply,
+        timestamp: new Date(),
+      };
+
+      const finalMessages = [...updatedMessages, replyMsg];
+      setChatMessages(finalMessages);
+      localStorage.setItem(`swipegig-chat-${activeChatCandidate.id}`, JSON.stringify(finalMessages));
+    }, 2000);
+  };
 
   // Load candidates and stats from API
   const fetchCandidates = async (searchVal = '') => {
@@ -331,7 +412,7 @@ export default function RecruiterPage() {
                     {/* Recruiter interaction buttons */}
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => toast.success(`Chat session with ${candidate.name} is starting...`)}
+                        onClick={() => handleOpenChat(candidate)}
                         className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 text-muted-foreground hover:text-white transition-colors cursor-pointer"
                         title="Send Message"
                       >
@@ -351,6 +432,113 @@ export default function RecruiterPage() {
           </div>
         )}
       </div>
+
+      {/* Slide-out Chat Drawer */}
+      <AnimatePresence>
+        {activeChatCandidate && (
+          <div className="fixed inset-0 z-50 flex justify-end">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setActiveChatCandidate(null)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-xs"
+            />
+
+            {/* Chat Panel */}
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 28, stiffness: 260 }}
+              className="relative w-full max-w-md h-full bg-background border-l border-white/10 flex flex-col shadow-2xl z-10"
+            >
+              {/* Header */}
+              <div className="p-4 border-b border-white/10 flex items-center justify-between bg-white/[0.01]">
+                <div className="flex items-center gap-3">
+                  {activeChatCandidate.avatarUrl ? (
+                    <img
+                      src={activeChatCandidate.avatarUrl}
+                      alt={activeChatCandidate.name}
+                      className="w-10 h-10 rounded-xl object-cover border border-white/10"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center font-bold text-white text-sm">
+                      {activeChatCandidate.name.charAt(0)}
+                    </div>
+                  )}
+                  <div>
+                    <h3 className="font-bold text-white text-sm flex items-center gap-1.5">
+                      {activeChatCandidate.name}
+                      {activeChatCandidate.isVerified && (
+                        <Shield className="w-3.5 h-3.5 text-primary fill-primary/10" title="Verified Human" />
+                      )}
+                    </h3>
+                    <p className="text-[10px] text-muted-foreground truncate max-w-[200px]">{activeChatCandidate.headline}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setActiveChatCandidate(null)}
+                  className="p-2 rounded-lg hover:bg-white/5 text-muted-foreground hover:text-white transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Message List */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-black/5 flex flex-col">
+                {chatMessages.map((msg) => {
+                  const isMe = msg.sender === 'me';
+                  return (
+                    <div
+                      key={msg.id}
+                      className={cn(
+                        'flex flex-col max-w-[80%] rounded-2xl p-3 text-xs leading-relaxed shadow-sm',
+                        isMe
+                          ? 'bg-primary/20 text-white rounded-tr-none ml-auto border border-primary/25'
+                          : 'bg-white/5 text-gray-200 rounded-tl-none mr-auto border border-white/5'
+                      )}
+                    >
+                      <p>{msg.text}</p>
+                      <span className="text-[8px] text-muted-foreground/50 self-end mt-1.5">
+                        {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                  );
+                })}
+
+                {/* Typing status */}
+                {isCandidateTyping && (
+                  <div className="bg-white/5 text-gray-400 rounded-2xl rounded-tl-none p-3 text-xs border border-white/5 mr-auto flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </div>
+                )}
+              </div>
+
+              {/* Form Input */}
+              <form onSubmit={handleSendMessage} className="p-4 border-t border-white/10 bg-white/[0.01] flex gap-2">
+                <input
+                  type="text"
+                  value={newMessageText}
+                  onChange={(e) => setNewMessageText(e.target.value)}
+                  placeholder={`Message ${activeChatCandidate.name}...`}
+                  className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary text-white placeholder:text-muted-foreground/30"
+                />
+                <button
+                  type="submit"
+                  disabled={!newMessageText.trim()}
+                  className="p-2.5 rounded-xl bg-primary hover:bg-primary-hover disabled:bg-white/5 text-black disabled:text-muted-foreground transition-all cursor-pointer flex items-center justify-center shrink-0"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

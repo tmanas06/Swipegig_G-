@@ -13,6 +13,7 @@ const updateSchema = z.object({
   location: z.string().max(100).optional(),
   visibility: z.enum(['PUBLIC', 'RECRUITERS_ONLY', 'PRIVATE']).optional(),
   name: z.string().max(100).optional(),
+  role: z.enum(['SEEKER', 'RECRUITER']).optional(),
 });
 
 export async function PUT(request: NextRequest) {
@@ -34,11 +35,15 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // Update name on user if provided
-    if (data.name) {
+    // Update name and role on user if provided
+    const userData: Record<string, any> = {};
+    if (data.name) userData.name = data.name;
+    if (data.role) userData.role = data.role;
+    
+    if (Object.keys(userData).length > 0) {
       await prisma.user.update({
         where: { privyId },
-        data: { name: data.name },
+        data: userData,
       });
     }
 
@@ -78,7 +83,24 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ profile, profileScore: score });
+    const updatedUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      include: {
+        profile: true,
+        resume: {
+          select: {
+            fileUrl: true,
+            fileName: true,
+            parsedSkills: true,
+            parsedSummary: true,
+            parsedExperience: true,
+            parsedEducation: true,
+          },
+        },
+      },
+    });
+
+    return NextResponse.json({ user: updatedUser, profile, profileScore: score });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Validation error', details: error.errors }, { status: 400 });

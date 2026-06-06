@@ -102,6 +102,11 @@ model User {
   reviews       Review[]
   recruiter     Recruiter?
   verificationLogs VerificationCheckLog[]
+  posts                 Post[]
+  pollVotes             PollVote[]
+  postTips              PostTip[]
+  postSaves             PostSave[]
+  weeklyCreatorBonuses  WeeklyCreatorBonus[]
 
   @@index([walletAddress])
   @@index([privyId])
@@ -288,4 +293,89 @@ model VerificationCheckLog {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, checkedAt])
+}
+
+// ─── Creator Marketplace Models ──────────────────────────
+
+model Post {
+  id          String      @id @default(cuid())
+  authorId    String
+  author      User        @relation(fields: [authorId], references: [id])
+  title       String
+  type        PostType
+  content     String?     // rich text / code content
+  mediaUrl    String?     // IPFS url for images, Livepeer playbackId for video
+  tags        String[]
+  viewCount   Int         @default(0)
+  tipTotal    Float       @default(0) // total G$ received
+  saveCount   Int         @default(0)
+  isPublished Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  pollOptions PollOption[]
+  votes       PollVote[]
+  tips        PostTip[]
+  saves       PostSave[]
+}
+
+enum PostType {
+  article
+  image
+  code
+  poll
+  video
+}
+
+model PollOption {
+  id        String     @id @default(cuid())
+  postId    String
+  post      Post       @relation(fields: [postId], references: [id])
+  text      String
+  votes     PollVote[]
+}
+
+model PollVote {
+  id        String     @id @default(cuid())
+  postId    String
+  post      Post       @relation(fields: [postId], references: [id])
+  optionId  String
+  option    PollOption @relation(fields: [optionId], references: [id])
+  userId    String
+  user      User       @relation(fields: [userId], references: [id])
+  createdAt DateTime   @default(now())
+  @@unique([postId, userId]) // one vote per user per poll
+}
+
+model PostTip {
+  id        String   @id @default(cuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id])
+  fromId    String
+  from      User     @relation(fields: [fromId], references: [id])
+  amount    Float    // G$ amount
+  txHash    String   // on-chain tx hash
+  createdAt DateTime @default(now())
+}
+
+model PostSave {
+  id        String   @id @default(cuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  @@unique([postId, userId])
+}
+
+model WeeklyCreatorBonus {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  rank      Int      // 1, 2, or 3
+  amount    Float    // 10, 5, or 1 G$
+  weekOf    DateTime // Monday of that week
+  txHash    String
+  score     Int      // engagement score that week
+  createdAt DateTime @default(now())
 }

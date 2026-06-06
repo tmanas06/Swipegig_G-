@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useQuery } from '@tanstack/react-query';
 import {
   User as UserIcon,
   Edit3,
@@ -33,9 +34,22 @@ export default function ProfilePage() {
   const { user: privyUser } = usePrivy();
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [profileTab, setProfileTab] = useState<'about' | 'posts'>('about');
 
+  // Fetch user posts
+  const { data: userPostsData, isLoading: isUserPostsLoading } = useQuery({
+    queryKey: ['profile-user-posts', user?.id],
+    queryFn: async () => {
+      const res = await fetch(`/api/marketplace/posts?authorId=${user?.id}`);
+      if (!res.ok) throw new Error();
+      return res.json();
+    },
+    enabled: !!user?.id,
+  });
+ 
   // Form states
   const [name, setName] = useState('');
+  const [role, setRole] = useState<'SEEKER' | 'RECRUITER' | 'ADMIN'>('SEEKER');
   const [headline, setHeadline] = useState('');
   const [bio, setBio] = useState('');
   const [location, setLocation] = useState('');
@@ -44,11 +58,12 @@ export default function ProfilePage() {
   const [portfolioUrl, setPortfolioUrl] = useState('');
   const [skills, setSkills] = useState<string[]>([]);
   const [newSkill, setNewSkill] = useState('');
-
+ 
   // Sync form states with user store on load / toggle
   useEffect(() => {
     if (user) {
       setName(user.name || '');
+      setRole(user.role || 'SEEKER');
       setHeadline(user.profile?.headline || '');
       setBio(user.profile?.bio || '');
       setLocation(user.profile?.location || '');
@@ -58,7 +73,7 @@ export default function ProfilePage() {
       setSkills(user.profile?.skills || []);
     }
   }, [user, isEditing]);
-
+ 
   if (isLoading || !user) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -69,7 +84,7 @@ export default function ProfilePage() {
       </div>
     );
   }
-
+ 
   const handleSave = async () => {
     setIsSaving(true);
     try {
@@ -88,33 +103,39 @@ export default function ProfilePage() {
           linkedinUrl: linkedinUrl || null,
           portfolioUrl: portfolioUrl || null,
           skills,
+          role,
         }),
       });
-
+ 
       if (!response.ok) {
         throw new Error('Failed to update profile');
       }
-
+ 
       const data = await response.json();
       
       // Update local store
-      setUser({
-        ...user,
-        name,
-        profileScore: data.profileScore,
-        profile: {
-          ...user.profile,
-          bio,
-          headline,
-          location,
-          githubUrl: githubUrl || null,
-          linkedinUrl: linkedinUrl || null,
-          portfolioUrl: portfolioUrl || null,
-          skills,
-          visibility: user.profile?.visibility || 'PUBLIC',
-        },
-      });
-
+      if (data.user) {
+        setUser(data.user);
+      } else {
+        setUser({
+          ...user,
+          name,
+          role: role as any,
+          profileScore: data.profileScore,
+          profile: {
+            ...user.profile,
+            bio,
+            headline,
+            location,
+            githubUrl: githubUrl || null,
+            linkedinUrl: linkedinUrl || null,
+            portfolioUrl: portfolioUrl || null,
+            skills,
+            visibility: user.profile?.visibility || 'PUBLIC',
+          },
+        });
+      }
+ 
       toast.success('Profile updated successfully!');
       setIsEditing(false);
     } catch (error: any) {
@@ -215,7 +236,7 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="text-xs font-medium text-muted-foreground mb-1 block">Full Name</label>
                   <input
@@ -224,6 +245,17 @@ export default function ProfilePage() {
                     onChange={(e) => setName(e.target.value)}
                     className="w-full glass rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary bg-transparent"
                   />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">User Role / Mode</label>
+                  <select
+                    value={role}
+                    onChange={(e) => setRole(e.target.value as 'SEEKER' | 'RECRUITER')}
+                    className="w-full glass rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary bg-background border border-border text-foreground outline-none cursor-pointer"
+                  >
+                    <option value="SEEKER">Talent / Contributor</option>
+                    <option value="RECRUITER">Founders / HR</option>
+                  </select>
                 </div>
                 <div>
                   <label className="text-xs font-medium text-muted-foreground mb-1 block">Headline</label>
@@ -307,8 +339,22 @@ export default function ProfilePage() {
 
               {/* Info */}
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-3 mb-1">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
                   <h1 className="text-2xl font-bold truncate">{name || 'Anon Seeker'}</h1>
+                  <span className={cn(
+                    'text-[10px] px-2.5 py-0.5 rounded-full font-bold border select-none shrink-0',
+                    user.role === 'RECRUITER' 
+                      ? 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400' 
+                      : user.role === 'ADMIN'
+                      ? 'bg-red-500/10 border-red-500/20 text-red-400'
+                      : 'bg-green-500/10 border-green-500/20 text-green-400'
+                  )}>
+                    {user.role === 'RECRUITER' 
+                      ? 'Founders / HR' 
+                      : user.role === 'ADMIN'
+                      ? 'Admin'
+                      : 'Talent / Contributor'}
+                  </span>
                   {user.ensName && (
                     <span className="badge-web3 text-xs px-2.5 py-0.5 rounded-full font-medium shrink-0">
                       {user.ensName}
@@ -398,102 +444,185 @@ export default function ProfilePage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Skills */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="glass rounded-2xl p-6"
-            >
-              <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-                <Code className="w-5 h-5 text-primary" />
-                Skills
-              </h2>
+            {/* Tabs Bar */}
+            <div className="flex border-b border-white/10 mb-2">
+              <button
+                onClick={() => setProfileTab('about')}
+                className={cn(
+                  'px-5 py-3 text-sm font-bold border-b-2 transition-colors cursor-pointer select-none',
+                  profileTab === 'about'
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                )}
+              >
+                About & Experience
+              </button>
+              <button
+                onClick={() => setProfileTab('posts')}
+                className={cn(
+                  'px-5 py-3 text-sm font-bold border-b-2 transition-colors cursor-pointer select-none',
+                  profileTab === 'posts'
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                )}
+              >
+                My Posts
+              </button>
+            </div>
 
-              {isEditing ? (
-                <div>
-                  <form onSubmit={handleAddSkill} className="flex gap-2 mb-4">
-                    <input
-                      type="text"
-                      placeholder="Add a skill (e.g. Solidity)..."
-                      value={newSkill}
-                      onChange={(e) => setNewSkill(e.target.value)}
-                      className="flex-1 glass rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary bg-transparent"
-                    />
-                    <button
-                      type="submit"
-                      className="flex items-center justify-center p-2.5 rounded-xl gradient-hero text-black hover:shadow-md transition-all cursor-pointer"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  </form>
-                  <div className="flex flex-wrap gap-2">
-                    {skills.map((skill) => (
-                      <span
-                        key={skill}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-sm font-medium"
-                      >
-                        {skill}
+            {profileTab === 'about' && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="space-y-6"
+              >
+                {/* Skills */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className="glass rounded-2xl p-6"
+                >
+                  <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
+                    <Code className="w-5 h-5 text-primary" />
+                    Skills
+                  </h2>
+
+                  {isEditing ? (
+                    <div>
+                      <form onSubmit={handleAddSkill} className="flex gap-2 mb-4">
+                        <input
+                          type="text"
+                          placeholder="Add a skill (e.g. Solidity)..."
+                          value={newSkill}
+                          onChange={(e) => setNewSkill(e.target.value)}
+                          className="flex-1 glass rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary bg-transparent"
+                        />
                         <button
-                          type="button"
-                          onClick={() => handleRemoveSkill(skill)}
-                          className="p-0.5 rounded-full hover:bg-white/10 text-muted-foreground hover:text-red-400"
+                          type="submit"
+                          className="flex items-center justify-center p-2.5 rounded-xl gradient-hero text-black hover:shadow-md transition-all cursor-pointer"
                         >
-                          <X className="w-3.5 h-3.5" />
+                          <Plus className="w-4 h-4" />
                         </button>
-                      </span>
+                      </form>
+                      <div className="flex flex-wrap gap-2">
+                        {skills.map((skill) => (
+                          <span
+                            key={skill}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-sm font-medium"
+                          >
+                            {skill}
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveSkill(skill)}
+                              className="p-0.5 rounded-full hover:bg-white/10 text-muted-foreground hover:text-red-400"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {skills.length > 0 ? (
+                        skills.map((skill) => (
+                          <span
+                            key={skill}
+                            className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-sm font-medium hover:border-primary/30 hover:bg-primary/5 transition-colors cursor-default"
+                          >
+                            {skill}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-sm text-muted-foreground italic">No skills added yet.</span>
+                      )}
+                    </div>
+                  )}
+                </motion.div>
+
+                {/* Experience */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className="glass rounded-2xl p-6"
+                >
+                  <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
+                    <Briefcase className="w-5 h-5 text-accent" />
+                    Experience
+                  </h2>
+                  <div className="space-y-6">
+                    {experienceList.length > 0 ? (
+                      experienceList.map((exp, i) => (
+                        <div key={i} className="relative pl-6 border-l-2 border-border/60">
+                          <div className="absolute left-[-5px] top-1 w-2 h-2 rounded-full bg-primary animate-pulse" />
+                          <h3 className="font-semibold text-sm md:text-base">{exp.title}</h3>
+                          <p className="text-sm text-primary font-medium">{exp.company}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{exp.period}</p>
+                          <p className="text-sm text-muted-foreground mt-2 leading-relaxed whitespace-pre-line">{exp.description}</p>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-6">
+                        <p className="text-sm text-muted-foreground mb-4">
+                          Upload your resume in onboarding or settings to automatically parse your work history.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+
+            {profileTab === 'posts' && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="space-y-4"
+              >
+                {isUserPostsLoading ? (
+                  <div className="flex justify-center py-12">
+                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                  </div>
+                ) : userPostsData?.posts && userPostsData.posts.length > 0 ? (
+                  <div className="grid grid-cols-1 gap-4">
+                    {userPostsData.posts.map((post: any) => (
+                      <Link
+                        key={post.id}
+                        href={`/marketplace/post/${post.id}`}
+                        className="glass rounded-2xl p-5 border border-white/5 hover:border-white/10 transition-all flex flex-col justify-between"
+                      >
+                        <div className="flex justify-between items-start gap-4">
+                          <h3 className="font-bold text-white text-base hover:text-primary transition-colors line-clamp-1">
+                            {post.title}
+                          </h3>
+                          <span className="text-[10px] uppercase font-bold text-primary px-2 py-0.5 rounded bg-primary/10 border border-primary/20 shrink-0">
+                            {post.type}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-xs text-muted-foreground mt-4 pt-3 border-t border-white/5">
+                          <span>{new Date(post.createdAt).toLocaleDateString()}</span>
+                          <div className="flex gap-4">
+                            <span>Views: {post.viewCount}</span>
+                            <span>Tips: {post.tipTotal.toFixed(0)} G$</span>
+                          </div>
+                        </div>
+                      </Link>
                     ))}
                   </div>
-                </div>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {skills.length > 0 ? (
-                    skills.map((skill) => (
-                      <span
-                        key={skill}
-                        className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-sm font-medium hover:border-primary/30 hover:bg-primary/5 transition-colors cursor-default"
-                      >
-                        {skill}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-sm text-muted-foreground italic">No skills added yet.</span>
-                  )}
-                </div>
-              )}
-            </motion.div>
-
-            {/* Experience */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="glass rounded-2xl p-6"
-            >
-              <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-                <Briefcase className="w-5 h-5 text-accent" />
-                Experience
-              </h2>
-              <div className="space-y-6">
-                {experienceList.length > 0 ? (
-                  experienceList.map((exp, i) => (
-                    <div key={i} className="relative pl-6 border-l-2 border-border/60">
-                      <div className="absolute left-[-5px] top-1 w-2 h-2 rounded-full bg-primary animate-pulse" />
-                      <h3 className="font-semibold text-sm md:text-base">{exp.title}</h3>
-                      <p className="text-sm text-primary font-medium">{exp.company}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{exp.period}</p>
-                      <p className="text-sm text-muted-foreground mt-2 leading-relaxed whitespace-pre-line">{exp.description}</p>
-                    </div>
-                  ))
                 ) : (
-                  <div className="text-center py-6">
-                    <p className="text-sm text-muted-foreground mb-4">
-                      Upload your resume in onboarding or settings to automatically parse your work history.
-                    </p>
+                  <div className="glass rounded-2xl p-12 text-center border border-white/5 flex flex-col items-center">
+                    <span className="text-3xl mb-3">📰</span>
+                    <h3 className="text-sm font-bold text-white mb-1">No posts yet</h3>
+                    <p className="text-xs text-muted-foreground mb-4">You haven&apos;t published any content in the Creator Marketplace.</p>
+                    <Link href="/marketplace/create" className="px-4 py-2 rounded-xl gradient-hero text-black font-bold text-xs">
+                      Create First Post
+                    </Link>
                   </div>
                 )}
-              </div>
-            </motion.div>
+              </motion.div>
+            )}
           </div>
 
           {/* Right Column - Profile Score */}

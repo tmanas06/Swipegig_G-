@@ -523,6 +523,43 @@ export default function SettingsPage() {
 
               <div className="flex items-center justify-between px-6 py-4">
                 <div>
+                  <p className="text-sm font-medium">User Role / Mode</p>
+                  <p className="text-xs text-muted-foreground">Choose your view: Talent/Contributor (Job Seeker) or Founders/HR (Employer)</p>
+                </div>
+                <select
+                  value={storeUser?.role || 'SEEKER'}
+                  onChange={async (e) => {
+                    const newRole = e.target.value as 'SEEKER' | 'RECRUITER';
+                    if (!privyUser?.id) return;
+                    const loadingId = toast.loading('Updating user role...');
+                    try {
+                      const res = await fetch('/api/profile/update', {
+                        method: 'PUT',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'x-privy-user-id': privyUser.id,
+                        },
+                        body: JSON.stringify({ role: newRole }),
+                      });
+                      if (!res.ok) throw new Error();
+                      const data = await res.json();
+                      if (data.user) {
+                        useUserStore.getState().setUser(data.user);
+                      }
+                      toast.success(`Role updated to ${newRole === 'SEEKER' ? 'Talent/Contributor' : 'Founders/HR'}!`, { id: loadingId });
+                    } catch (err) {
+                      toast.error('Failed to update role', { id: loadingId });
+                    }
+                  }}
+                  className="bg-background border border-border text-foreground text-xs rounded-xl focus:ring-primary focus:border-primary block p-2 outline-none cursor-pointer"
+                >
+                  <option value="SEEKER">Talent / Contributor</option>
+                  <option value="RECRUITER">Founders / HR</option>
+                </select>
+              </div>
+
+              <div className="flex items-center justify-between px-6 py-4">
+                <div>
                   <p className="text-sm font-medium">Profile Visibility</p>
                   <p className="text-xs text-muted-foreground">Control who can view your builder profile</p>
                 </div>

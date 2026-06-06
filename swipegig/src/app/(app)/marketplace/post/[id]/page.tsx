@@ -232,7 +232,9 @@ export default function SinglePostPage({ params }: { params: Promise<{ id: strin
                     <div className="flex items-center gap-1">
                       <span className="font-bold text-white text-sm">{post.author.name || 'Anonymous'}</span>
                       {post.author.isGoodDollarVerified && (
-                        <ShieldCheck className="w-4 h-4 text-green-400 shrink-0" title="GoodDollar Verified Human" />
+                        <span title="GoodDollar Verified Human" className="inline-flex">
+                          <ShieldCheck className="w-4 h-4 text-green-400 shrink-0" />
+                        </span>
                       )}
                     </div>
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
@@ -447,7 +449,7 @@ export default function SinglePostPage({ params }: { params: Promise<{ id: strin
                               postId={post.id}
                               authorWallet={post.author.walletAddress!}
                               amount={amt}
-                              onTipSuccess={refetch}
+                              onTipSuccess={() => refetch()}
                             />
                           ))}
                         </div>

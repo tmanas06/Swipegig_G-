@@ -1,7 +1,7 @@
 // src/lib/livepeer.ts
-import { createClient } from 'livepeer';
+import { Livepeer } from 'livepeer';
 
-const livepeer = createClient({
+const livepeer = new Livepeer({
   apiKey: process.env.LIVEPEER_API_KEY!,
 });
 
@@ -10,16 +10,17 @@ export async function uploadVideoToLivepeer(
   onProgress?: (progress: number) => void
 ): Promise<{ assetId: string; playbackId: string }> {
   // 1. Create asset
-  const asset = await livepeer.asset.create({
+  const response = await livepeer.asset.create({
     name: file.name,
     storage: { ipfs: true },
   });
 
-  if (!asset.upload?.tusEndpoint || !asset.id) {
+  if (!response.data?.tusEndpoint || !response.data?.asset?.id) {
     throw new Error('Failed to create upload endpoint from Livepeer');
   }
 
-  const { tusEndpoint, id } = asset.upload;
+  const tusEndpoint = response.data.tusEndpoint;
+  const id = response.data.asset.id;
 
   // Use tus-js-client for chunked upload
   return new Promise((resolve, reject) => {
@@ -56,9 +57,9 @@ async function waitForAsset(
   maxAttempts = 30
 ): Promise<{ playbackId: string }> {
   for (let i = 0; i < maxAttempts; i++) {
-    const asset = await livepeer.asset.get({ id: assetId });
-    if (asset.status?.phase === 'ready' && asset.playbackId) {
-      return { playbackId: asset.playbackId };
+    const response = await livepeer.asset.get(assetId);
+    if (response.asset?.status?.phase === 'ready' && response.asset?.playbackId) {
+      return { playbackId: response.asset.playbackId };
     }
     await new Promise((r) => setTimeout(r, 2000));
   }

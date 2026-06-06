@@ -157,7 +157,9 @@ export function PostCard({ post, onSaveToggle }: PostCardProps) {
                   {post.author.name || 'Anonymous'}
                 </span>
                 {post.author.isGoodDollarVerified && (
-                  <ShieldCheck className="w-4 h-4 text-green-400 shrink-0" title="GoodDollar Verified Human" />
+                  <span title="GoodDollar Verified Human" className="inline-flex">
+                    <ShieldCheck className="w-4 h-4 text-green-400 shrink-0" />
+                  </span>
                 )}
               </div>
               <span className="text-[10px] text-muted-foreground block">

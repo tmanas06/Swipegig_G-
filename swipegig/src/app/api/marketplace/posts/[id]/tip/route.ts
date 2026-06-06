@@ -140,6 +140,13 @@ export async function POST(
       );
     }
 
+    if (!args || args.length < 2) {
+      return NextResponse.json(
+        { error: 'Invalid transfer transaction arguments' },
+        { status: 400 }
+      );
+    }
+
     const recipientAddress = args[0] as string;
     const transferValue = args[1] as bigint;
 

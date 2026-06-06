@@ -472,7 +472,9 @@ export default function RecruiterPage() {
                     <h3 className="font-bold text-white text-sm flex items-center gap-1.5">
                       {activeChatCandidate.name}
                       {activeChatCandidate.isVerified && (
-                        <Shield className="w-3.5 h-3.5 text-primary fill-primary/10" title="Verified Human" />
+                        <span title="Verified Human" className="inline-flex">
+                          <Shield className="w-3.5 h-3.5 text-primary fill-primary/10" />
+                        </span>
                       )}
                     </h3>
                     <p className="text-[10px] text-muted-foreground truncate max-w-[200px]">{activeChatCandidate.headline}</p>

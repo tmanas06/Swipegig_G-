@@ -329,7 +329,7 @@ export default function MarketplaceFeedPage() {
                   <PostCard 
                     key={post.id} 
                     post={post} 
-                    onSaveToggle={refetchFeed}
+                    onSaveToggle={() => refetchFeed()}
                   />
                 ))}
               </div>

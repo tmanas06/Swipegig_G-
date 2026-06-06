@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useSprings, animated, to as interpolate } from '@react-spring/web';
 import { useDrag } from '@use-gesture/react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -103,11 +103,18 @@ function stripHtmlTags(html: string): string {
 }
 
 export default function FeedPage() {
-  const { user } = useUserStore();
-  const [jobs, setJobs] = useState<any[]>([]);
+  const { user, isLoading: isUserLoading } = useUserStore();
+  const [rawJobs, setRawJobs] = useState<any[]>([]);
   const [swipedIndices, setSwipedIndices] = useState<Set<number>>(() => new Set());
   const [actionIndicator, setActionIndicator] = useState<{ text: string; color: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const pageLoading = isLoading || isUserLoading;
+
+  // Pagination states
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
 
   // Active filter states used for the API call
   const [activeSearch, setActiveSearch] = useState('');
@@ -127,8 +134,13 @@ export default function FeedPage() {
 
   const fetchJobs = async (filtersObj?: { search: string; type: string; mode: string; isWeb3: boolean }) => {
     setIsLoading(true);
+    setPage(1);
+    setHasMore(true);
     try {
-      const params = new URLSearchParams();
+      const params = new URLSearchParams({
+        limit: '20',
+        page: '1',
+      });
       if (filtersObj) {
         if (filtersObj.search.trim()) params.append('search', filtersObj.search.trim());
         if (filtersObj.type !== 'ALL') params.append('type', filtersObj.type);
@@ -137,46 +149,62 @@ export default function FeedPage() {
       }
 
       const response = await fetch(`/api/jobs?${params.toString()}`);
-      if (response.ok) {
-        const data = await response.json();
-        const userSkills = user?.profile?.skills || [];
-        
-        const processedJobs = (data.jobs || []).map((job: any) => {
-          // Calculate matching score: 60% base + 40% matching skills ratio
-          const matchCount = job.skills.filter((s: string) => userSkills.includes(s)).length;
-          const matchScore = job.skills.length > 0
-            ? Math.round((matchCount / job.skills.length) * 40) + 60
-            : 75;
-          return {
-            ...job,
-            matchScore,
-          };
-        });
-
-        // Sort by match score
-        processedJobs.sort((a: any, b: any) => (b.matchScore || 0) - (a.matchScore || 0));
-
-        // Deduplicate jobs by title + company (case-insensitive, trimmed)
-        const seen = new Set<string>();
-        const uniqueJobs = processedJobs.filter((job: any) => {
-          const key = `${job.title.toLowerCase().trim()}|${job.company.toLowerCase().trim()}`;
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        });
-
-        setJobs(uniqueJobs);
-        setSwipedIndices(new Set()); // Reset card deck whenever query changes
+      if (!response.ok) {
+        throw new Error(`Failed to fetch jobs: ${response.statusText}`);
+      }
+      const data = await response.json();
+      setRawJobs(data.jobs || []);
+      setSwipedIndices(new Set()); // Reset card deck whenever query changes
+      if (data.pagination) {
+        setHasMore(data.pagination.page < data.pagination.totalPages);
+      } else {
+        setHasMore((data.jobs || []).length === 20);
       }
     } catch (error) {
       console.error('Failed to load jobs:', error);
       toast.error('Failed to load jobs feed.');
+      setRawJobs([]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Fetch jobs on mount, user load, or active filter changes
+  const fetchMoreJobs = async () => {
+    if (isFetchingMore || !hasMore) return;
+    setIsFetchingMore(true);
+    const nextPage = page + 1;
+    try {
+      const params = new URLSearchParams({
+        limit: '20',
+        page: nextPage.toString(),
+      });
+      if (activeSearch.trim()) params.append('search', activeSearch.trim());
+      if (activeJobType !== 'ALL') params.append('type', activeJobType);
+      if (activeJobMode !== 'ALL') params.append('mode', activeJobMode);
+      if (activeIsWeb3) params.append('isWeb3', 'true');
+
+      const response = await fetch(`/api/jobs?${params.toString()}`);
+      if (response.ok) {
+        const data = await response.json();
+        const newJobs = data.jobs || [];
+        if (newJobs.length > 0) {
+          setRawJobs((prev) => [...prev, ...newJobs]);
+          setPage(nextPage);
+        }
+        if (data.pagination) {
+          setHasMore(data.pagination.page < data.pagination.totalPages);
+        } else {
+          setHasMore(newJobs.length === 20);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load more jobs:', error);
+    } finally {
+      setIsFetchingMore(false);
+    }
+  };
+
+  // Fetch jobs only when filters change
   useEffect(() => {
     fetchJobs({
       search: activeSearch,
@@ -184,7 +212,45 @@ export default function FeedPage() {
       mode: activeJobMode,
       isWeb3: activeIsWeb3,
     });
-  }, [user, activeSearch, activeJobType, activeJobMode, activeIsWeb3]);
+  }, [activeSearch, activeJobType, activeJobMode, activeIsWeb3]);
+
+  // Trigger loading next page when remaining cards in deck is <= 5
+  useEffect(() => {
+    const remaining = rawJobs.length - swipedIndices.size;
+    if (remaining <= 5 && hasMore && !isFetchingMore && rawJobs.length > 0) {
+      fetchMoreJobs();
+    }
+  }, [swipedIndices.size, rawJobs.length, hasMore, isFetchingMore]);
+
+  // Client-side process, score, sort, and deduplicate when rawJobs or user loads/changes
+  const jobs = useMemo(() => {
+    if (rawJobs.length === 0) return [];
+    const userSkills = user?.profile?.skills || [];
+    
+    const processedJobs = rawJobs.map((job: any) => {
+      // Calculate matching score: 60% base + 40% matching skills ratio
+      const matchCount = job.skills.filter((s: string) => userSkills.includes(s)).length;
+      const matchScore = job.skills.length > 0
+        ? Math.round((matchCount / job.skills.length) * 40) + 60
+        : 75;
+      return {
+        ...job,
+        matchScore,
+      };
+    });
+
+    // Sort by match score
+    processedJobs.sort((a: any, b: any) => (b.matchScore || 0) - (a.matchScore || 0));
+
+    // Deduplicate jobs by title + company (case-insensitive, trimmed)
+    const seen = new Set<string>();
+    return processedJobs.filter((job: any) => {
+      const key = `${job.title.toLowerCase().trim()}|${job.company.toLowerCase().trim()}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [rawJobs, user]);
 
   // Sync temporary modal filters with active applied filters on modal open
   useEffect(() => {
@@ -524,19 +590,8 @@ export default function FeedPage() {
 
   const hasActiveFilters = activeSearch || activeJobType !== 'ALL' || activeJobMode !== 'ALL' || activeIsWeb3;
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <p className="text-sm text-muted-foreground">Loading job opportunities...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-background page-enter" key={jobs.length}>
+    <div className="min-h-screen bg-background page-enter">
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-border">
         <div>
@@ -544,7 +599,7 @@ export default function FeedPage() {
             Discover <span className="text-gradient-primary">Jobs</span>
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {jobs.length - swipedIndices.size} jobs remaining today
+            {pageLoading ? 'Loading jobs...' : `${jobs.length - swipedIndices.size} jobs remaining today`}
           </p>
         </div>
         <button
@@ -581,152 +636,161 @@ export default function FeedPage() {
           )}
         </AnimatePresence>
 
-        {/* Cards */}
-        {springs.map(({ x, y, rot, scale, opacity }, i) => {
-          const job = jobs[i];
-          if (!job) return null;
-          const isSwiped = swipedIndices.has(i);
-          return (
-            <animated.div
-              key={job.id}
-              className={cn(
-                "absolute w-[90vw] max-w-[350px] sm:max-w-[400px] md:max-w-[460px] lg:max-w-[500px] will-change-transform touch-none",
-                isSwiped && "pointer-events-none"
-              )}
-              style={{
-                x,
-                y,
-                opacity,
-                zIndex: jobs.length - i,
-              }}
-            >
-              <animated.div
-                {...bind(i)}
-                className="glass rounded-3xl p-6 md:p-8 cursor-grab active:cursor-grabbing gradient-border select-none bg-background/80 backdrop-blur-md shadow-2xl"
-                style={{
-                  transform: interpolate([rot, scale], transformCard),
-                }}
-              >
-                {/* Company Header */}
-                <div className="flex items-start justify-between mb-5">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={cn(
-                        'w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gradient-to-br flex items-center justify-center text-white font-bold text-lg md:text-xl shrink-0 shadow-inner',
-                        getCompanyColor(job.company)
-                      )}
-                    >
-                      {getCompanyInitial(job.company)}
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-lg md:text-xl leading-tight">{job.title}</h3>
-                      <div className="flex items-center gap-1.5 mt-1">
-                        <Building2 className="w-3.5 h-3.5 text-muted-foreground" />
-                        <span className="text-sm md:text-base text-muted-foreground">{job.company}</span>
+        {pageLoading ? (
+          <div className="flex flex-col items-center gap-3">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">Loading job opportunities...</p>
+          </div>
+        ) : (
+          <>
+            {/* Cards */}
+            {springs.map(({ x, y, rot, scale, opacity }, i) => {
+              const job = jobs[i];
+              if (!job) return null;
+              const isSwiped = swipedIndices.has(i);
+              return (
+                <animated.div
+                  key={job.id}
+                  className={cn(
+                    "absolute w-[90vw] max-w-[350px] sm:max-w-[400px] md:max-w-[460px] lg:max-w-[500px] will-change-transform touch-none",
+                    isSwiped && "pointer-events-none"
+                  )}
+                  style={{
+                    x,
+                    y,
+                    opacity,
+                    zIndex: jobs.length - i,
+                  }}
+                >
+                  <animated.div
+                    {...bind(i)}
+                    className="glass rounded-3xl p-6 md:p-8 cursor-grab active:cursor-grabbing gradient-border select-none bg-background/80 backdrop-blur-md shadow-2xl"
+                    style={{
+                      transform: interpolate([rot, scale], transformCard),
+                    }}
+                  >
+                    {/* Company Header */}
+                    <div className="flex items-start justify-between mb-5">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={cn(
+                            'w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gradient-to-br flex items-center justify-center text-white font-bold text-lg md:text-xl shrink-0 shadow-inner',
+                            getCompanyColor(job.company)
+                          )}
+                        >
+                          {getCompanyInitial(job.company)}
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-lg md:text-xl leading-tight">{job.title}</h3>
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <Building2 className="w-3.5 h-3.5 text-muted-foreground" />
+                            <span className="text-sm md:text-base text-muted-foreground">{job.company}</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </div>
 
-                {/* Match Score */}
-                {job.matchScore && (
-                  <div
-                    className={cn(
-                      'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs md:text-sm font-semibold mb-4 border',
-                      getMatchBg(job.matchScore)
+                    {/* Match Score */}
+                    {job.matchScore && (
+                      <div
+                        className={cn(
+                          'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs md:text-sm font-semibold mb-4 border',
+                          getMatchBg(job.matchScore)
+                        )}
+                      >
+                        <Sparkles className={cn('w-3.5 h-3.5', getMatchColor(job.matchScore))} />
+                        <span className={getMatchColor(job.matchScore)}>
+                          {job.matchScore}% match
+                        </span>
+                      </div>
                     )}
-                  >
-                    <Sparkles className={cn('w-3.5 h-3.5', getMatchColor(job.matchScore))} />
-                    <span className={getMatchColor(job.matchScore)}>
-                      {job.matchScore}% match
-                    </span>
-                  </div>
+
+                    {/* Description */}
+                    <p className="text-sm md:text-base text-muted-foreground leading-relaxed mb-4 md:mb-6 line-clamp-3 md:line-clamp-4">
+                      {stripHtmlTags(job.description)}
+                    </p>
+
+                    {/* Skills */}
+                    <div className="flex flex-wrap gap-2 mb-5">
+                      {job.skills.slice(0, 5).map((skill: string) => (
+                        <span
+                          key={skill}
+                          className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-xs md:text-sm font-medium text-muted-foreground"
+                        >
+                          {skill}
+                        </span>
+                      ))}
+                    </div>
+
+                    {/* Meta */}
+                    <div className="flex items-center justify-between text-xs md:text-sm border-t border-border pt-4 md:pt-6">
+                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <DollarSign className="w-3.5 h-3.5" />
+                        <span>
+                          {job.salaryMin && job.salaryMax
+                            ? `${formatCurrency(job.salaryMin!)} – ${formatCurrency(job.salaryMax!)}`
+                            : 'Competitive'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <MapPin className="w-3.5 h-3.5" />
+                        <span>{formatJobLocation(job.mode, job.location)}</span>
+                      </div>
+                    </div>
+
+                    {/* Web3 Badge */}
+                    {job.isWeb3 && (
+                      <div className="mt-3 flex items-center justify-end">
+                        <span className="badge-web3 text-xs px-2 py-0.5 rounded-full font-medium">
+                          Web3
+                        </span>
+                      </div>
+                    )}
+                  </animated.div>
+                </animated.div>
+              );
+            })}
+
+            {/* Empty state / No jobs matching filters state */}
+            {(swipedIndices.size === jobs.length || jobs.length === 0) && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="text-center px-6 max-w-sm"
+              >
+                <div className="w-20 h-20 rounded-full glass flex items-center justify-center mx-auto mb-4 border border-white/10 shadow-lg">
+                  <Sparkles className="w-8 h-8 text-primary animate-pulse" />
+                </div>
+                {jobs.length === 0 && hasActiveFilters ? (
+                  <>
+                    <h3 className="text-xl font-bold mb-2">No matching jobs</h3>
+                    <p className="text-muted-foreground mb-5 text-sm">
+                      We couldn't find any opportunities matching your active filters. Try adjusting them!
+                    </p>
+                    <div className="flex items-center gap-3 justify-center">
+                      <button
+                        onClick={() => setIsFilterOpen(true)}
+                        className="px-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-sm font-semibold hover:bg-white/10 transition-all cursor-pointer"
+                      >
+                        Adjust Filters
+                      </button>
+                      <button
+                        onClick={handleClearFilters}
+                        className="px-4 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:opacity-90 transition-all shadow-lg shadow-primary/20 cursor-pointer"
+                      >
+                        Clear Filters
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <h3 className="text-xl font-bold mb-2">All caught up!</h3>
+                    <p className="text-muted-foreground text-sm">Check back later for more jobs.</p>
+                  </>
                 )}
-
-                {/* Description */}
-                <p className="text-sm md:text-base text-muted-foreground leading-relaxed mb-4 md:mb-6 line-clamp-3 md:line-clamp-4">
-                  {stripHtmlTags(job.description)}
-                </p>
-
-                {/* Skills */}
-                <div className="flex flex-wrap gap-2 mb-5">
-                  {job.skills.slice(0, 5).map((skill: string) => (
-                    <span
-                      key={skill}
-                      className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-xs md:text-sm font-medium text-muted-foreground"
-                    >
-                      {skill}
-                    </span>
-                  ))}
-                </div>
-
-                {/* Meta */}
-                <div className="flex items-center justify-between text-xs md:text-sm border-t border-border pt-4 md:pt-6">
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    <DollarSign className="w-3.5 h-3.5" />
-                    <span>
-                      {job.salaryMin && job.salaryMax
-                        ? `${formatCurrency(job.salaryMin!)} – ${formatCurrency(job.salaryMax!)}`
-                        : 'Competitive'}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    <MapPin className="w-3.5 h-3.5" />
-                    <span>{formatJobLocation(job.mode, job.location)}</span>
-                  </div>
-                </div>
-
-                {/* Web3 Badge */}
-                {job.isWeb3 && (
-                  <div className="mt-3 flex items-center justify-end">
-                    <span className="badge-web3 text-xs px-2 py-0.5 rounded-full font-medium">
-                      Web3
-                    </span>
-                  </div>
-                )}
-              </animated.div>
-            </animated.div>
-          );
-        })}
-
-        {/* Empty state / No jobs matching filters state */}
-        {(swipedIndices.size === jobs.length || jobs.length === 0) && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="text-center px-6 max-w-sm"
-          >
-            <div className="w-20 h-20 rounded-full glass flex items-center justify-center mx-auto mb-4 border border-white/10 shadow-lg">
-              <Sparkles className="w-8 h-8 text-primary animate-pulse" />
-            </div>
-            {jobs.length === 0 && hasActiveFilters ? (
-              <>
-                <h3 className="text-xl font-bold mb-2">No matching jobs</h3>
-                <p className="text-muted-foreground mb-5 text-sm">
-                  We couldn't find any opportunities matching your active filters. Try adjusting them!
-                </p>
-                <div className="flex items-center gap-3 justify-center">
-                  <button
-                    onClick={() => setIsFilterOpen(true)}
-                    className="px-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-sm font-semibold hover:bg-white/10 transition-all cursor-pointer"
-                  >
-                    Adjust Filters
-                  </button>
-                  <button
-                    onClick={handleClearFilters}
-                    className="px-4 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:opacity-90 transition-all shadow-lg shadow-primary/20 cursor-pointer"
-                  >
-                    Clear Filters
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <h3 className="text-xl font-bold mb-2">All caught up!</h3>
-                <p className="text-muted-foreground text-sm">Check back later for more jobs.</p>
-              </>
+              </motion.div>
             )}
-          </motion.div>
+          </>
         )}
       </div>
 

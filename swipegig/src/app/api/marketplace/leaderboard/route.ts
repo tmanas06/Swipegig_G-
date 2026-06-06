@@ -111,65 +111,100 @@ export async function GET(request: NextRequest) {
     });
     const totalDistributed = distributedSum._sum.amount || 0;
 
-    // 6. Query all-time top creators
-    const usersWithPosts = await prisma.user.findMany({
+    // 6. Query all-time top creators using aggregation
+    const allTimePostsAgg = await prisma.post.groupBy({
+      by: ['authorId'],
       where: {
-        posts: {
-          some: {},
-        },
+        isPublished: true,
+      },
+      _sum: {
+        viewCount: true,
+        saveCount: true,
+        tipTotal: true,
+      },
+      _count: {
+        id: true,
+      },
+    });
+
+    // Count all-time tips per post
+    const allTimeTipsAgg = await prisma.postTip.groupBy({
+      by: ['postId'],
+      _count: {
+        id: true,
+      },
+    });
+
+    const allTimeTipCountMap = new Map<string, number>();
+    for (const t of allTimeTipsAgg) {
+      allTimeTipCountMap.set(t.postId, t._count.id || 0);
+    }
+
+    // Get post author mappings for all posts
+    const allPostsWithAuthors = await prisma.post.findMany({
+      where: {
+        isPublished: true,
+      },
+      select: {
+        id: true,
+        authorId: true,
+      },
+    });
+
+    const allTimeAuthorTipCountMap = new Map<string, number>();
+    for (const p of allPostsWithAuthors) {
+      const tips = allTimeTipCountMap.get(p.id) || 0;
+      allTimeAuthorTipCountMap.set(p.authorId, (allTimeAuthorTipCountMap.get(p.authorId) || 0) + tips);
+    }
+
+    // Calculate score per author
+    const allTimeLeaderboard = allTimePostsAgg.map((ap) => {
+      const totalViews = ap._sum.viewCount || 0;
+      const totalSaves = ap._sum.saveCount || 0;
+      const totalTipsCount = allTimeAuthorTipCountMap.get(ap.authorId) || 0;
+      const score = (totalViews * 1) + (totalSaves * 3) + (totalTipsCount * 10);
+      return {
+        authorId: ap.authorId,
+        score,
+        postsCount: ap._count.id || 0,
+        tipsEarned: ap._sum.tipTotal || 0,
+      };
+    });
+
+    allTimeLeaderboard.sort((a, b) => b.score - a.score);
+    const top10AllTime = allTimeLeaderboard.slice(0, 10);
+
+    const top10AllTimeAuthorIds = top10AllTime.map((t) => t.authorId);
+    const allTimeUsers = await prisma.user.findMany({
+      where: {
+        id: { in: top10AllTimeAuthorIds },
       },
       select: {
         id: true,
         name: true,
         avatarUrl: true,
-        isGoodDollarVerified: true,
         walletAddress: true,
-        posts: {
-          select: {
-            viewCount: true,
-            saveCount: true,
-            tipTotal: true,
-            tips: {
-              select: {
-                id: true,
-              },
-            },
-          },
-        },
+        isGoodDollarVerified: true,
       },
     });
 
-    const allTimeTopCreators = usersWithPosts
-      .map((user) => {
-        let totalViews = 0;
-        let totalSaves = 0;
-        let totalTipsCount = 0;
-        let totalTipsAmount = 0;
+    const allTimeUserMap = new Map<string, typeof allTimeUsers[0]>();
+    for (const u of allTimeUsers) {
+      allTimeUserMap.set(u.id, u);
+    }
 
-        for (const post of user.posts) {
-          totalViews += post.viewCount;
-          totalSaves += post.saveCount;
-          totalTipsCount += post.tips.length;
-          totalTipsAmount += post.tipTotal;
-        }
-
-        const score = (totalViews * 1) + (totalSaves * 3) + (totalTipsCount * 10);
-
+    const allTimeTopCreators = top10AllTime
+      .map((t) => {
+        const creator = allTimeUserMap.get(t.authorId);
+        if (!creator) return null;
         return {
-          creator: {
-            id: user.id,
-            name: user.name,
-            avatarUrl: user.avatarUrl,
-            walletAddress: user.walletAddress,
-            isGoodDollarVerified: user.isGoodDollarVerified,
-          },
-          score,
-          tipsEarned: totalTipsAmount,
-          postsCount: user.posts.length,
+          creator,
+          score: t.score,
+          tipsEarned: t.tipsEarned,
+          postsCount: t.postsCount,
         };
       })
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 10);
+      .filter(Boolean);
 
     return NextResponse.json({
       currentWeekTopCreators,

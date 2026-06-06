@@ -98,35 +98,13 @@ export async function GET(request: NextRequest) {
   try {
     const totalCount = await prisma.job.count();
     
-    // Check the latest synced Remotive job to determine last sync time
-    const lastJob = await prisma.job.findFirst({
-      where: { source: 'REMOTIVE' },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    const TEN_MINUTES = 10 * 60 * 1000;
-    const isStale = !lastJob || (Date.now() - lastJob.createdAt.getTime() > TEN_MINUTES);
-    // Sync if stale OR if database has fewer than 50 jobs
-    const shouldSync = isStale || totalCount < 50;
-
-    if (shouldSync) {
-      console.log(`[JOBS_API] Running sync. Total jobs in DB: ${totalCount}. Stale: ${isStale}.`);
-      if (totalCount === 0) {
-        const syncResult = await syncJobsFromAPIs();
-        const count = await prisma.job.count();
-        if (count === 0 && (!syncResult.success || syncResult.newJobs === 0)) {
-          console.log('[JOBS_API] Live sync failed and database is empty. Falling back to default Web3 seed jobs...');
-          await prisma.job.createMany({
-            data: SEED_JOBS,
-          });
-        }
-      } else {
-        // Trigger background sync so the HTTP request completes immediately
-        syncJobsFromAPIs()
-          .then((res) => console.log('[JOBS_API] Background sync completed:', res))
-          .catch((err) => console.error('[JOBS_API] Background sync failed:', err));
-      }
+    if (totalCount === 0) {
+      console.log('[JOBS_API] Database is empty. Seeding default Web3 jobs...');
+      await prisma.job.createMany({
+        data: SEED_JOBS,
+      });
     }
+
     const { searchParams } = new URL(request.url);
     const params = Object.fromEntries(searchParams);
     const filters = filterSchema.parse(params);

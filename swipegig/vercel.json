@@ -3,6 +3,10 @@
     {
       "path": "/api/marketplace/weekly-bonus",
       "schedule": "0 0 * * 1"
+    },
+    {
+      "path": "/api/jobs/sync",
+      "schedule": "0 */12 * * *"
     }
   ]
 }

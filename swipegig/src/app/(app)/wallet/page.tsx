@@ -84,11 +84,12 @@ export default function WalletPage() {
   // Balances
   const [celoBalance, setCeloBalance] = useState('0.00');
   const [gdBalance, setGdBalance] = useState('0.00');
+  const [realGdBalance, setRealGdBalance] = useState('0.00');
   const [isFetchingBalances, setIsFetchingBalances] = useState(false);
 
   // Send Form
   const [sendModalOpen, setSendModalOpen] = useState(false);
-  const [sendToken, setSendToken] = useState<'CELO' | 'G$'>('CELO');
+  const [sendToken, setSendToken] = useState<'CELO' | 'G$_REWARDS' | 'G$_MAINNET'>('CELO');
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -116,6 +117,7 @@ export default function WalletPage() {
       const data = await res.json();
       setCeloBalance(data.celoBalance ?? '0.0000');
       setGdBalance(data.gdBalance ?? '0.00');
+      setRealGdBalance(data.realGdBalance ?? '0.00');
 
       if (!data.success) {
         toast('Could not reach Celo RPC. Balance may be unavailable.', {
@@ -132,6 +134,7 @@ export default function WalletPage() {
       console.error('Failed to fetch wallet balances:', err);
       setCeloBalance('0.0000');
       setGdBalance('0.00');
+      setRealGdBalance('0.00');
     } finally {
       setIsFetchingBalances(false);
     }
@@ -186,8 +189,9 @@ export default function WalletPage() {
       return;
     }
 
+    const tokenLabel = sendToken === 'CELO' ? 'CELO' : sendToken === 'G$_REWARDS' ? 'G$ Rewards' : 'G$ Mainnet';
     setIsSending(true);
-    const loadingToast = toast.loading(`Sending ${amount} ${sendToken}...`);
+    const loadingToast = toast.loading(`Sending ${amount} ${tokenLabel}...`);
 
     try {
       // Ensure connected to Celo Mainnet
@@ -209,9 +213,10 @@ export default function WalletPage() {
           value: parseEther(amount),
         });
       } else {
-        // ERC20 GoodDollar transfer
+        // ERC20 GoodDollar transfer (rewards or real token)
+        const tokenAddress = sendToken === 'G$_REWARDS' ? GOOD_DOLLAR_ADDRESS : '0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A';
         txHash = await walletClient.writeContract({
-          address: GOOD_DOLLAR_ADDRESS,
+          address: tokenAddress,
           abi: [
             {
               inputs: [
@@ -347,7 +352,7 @@ export default function WalletPage() {
             className="space-y-8"
           >
             {/* Balance Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* CELO Card */}
               <div className="glass rounded-2xl p-6 relative overflow-hidden group">
                 <div className="absolute top-0 right-0 w-[150px] h-[150px] bg-yellow-500/5 rounded-full blur-[80px] group-hover:bg-yellow-500/10 transition-all duration-300" />
@@ -356,18 +361,18 @@ export default function WalletPage() {
                     <p className="text-xs text-muted-foreground uppercase font-semibold tracking-wider">
                       Celo Native
                     </p>
-                    <h3 className="text-3xl font-extrabold mt-3">{celoBalance} CELO</h3>
+                    <h3 className="text-2xl font-extrabold mt-3 truncate">{celoBalance} CELO</h3>
                     <p className="text-xs text-muted-foreground mt-1">
                       ~ ${(parseFloat(celoBalance) * 0.65).toFixed(2)} USD
                     </p>
                   </div>
-                  <div className="w-11 h-11 rounded-xl bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center">
+                  <div className="w-11 h-11 rounded-xl bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center shrink-0">
                     <span className="font-bold text-sm text-yellow-500">C</span>
                   </div>
                 </div>
               </div>
 
-              {/* G$ Card */}
+              {/* G$ Rewards Card */}
               <div className="glass rounded-2xl p-6 relative overflow-hidden group">
                 <div className="absolute top-0 right-0 w-[150px] h-[150px] bg-emerald-500/5 rounded-full blur-[80px] group-hover:bg-emerald-500/10 transition-all duration-300" />
                 <div className="flex items-start justify-between">
@@ -375,12 +380,31 @@ export default function WalletPage() {
                     <p className="text-xs text-muted-foreground uppercase font-semibold tracking-wider">
                       GoodDollar Rewards
                     </p>
-                    <h3 className="text-3xl font-extrabold mt-3">{gdBalance} G$</h3>
+                    <h3 className="text-2xl font-extrabold mt-3 truncate">{gdBalance} G$</h3>
                     <p className="text-xs text-muted-foreground mt-1">
                       ~ ${(parseFloat(gdBalance) * 0.00015).toFixed(4)} USD
                     </p>
                   </div>
-                  <div className="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                  <div className="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                    <span className="font-bold text-sm text-emerald-400">G$</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Real G$ Mainnet Card */}
+              <div className="glass rounded-2xl p-6 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-[150px] h-[150px] bg-emerald-500/5 rounded-full blur-[80px] group-hover:bg-emerald-500/10 transition-all duration-300" />
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase font-semibold tracking-wider">
+                      GoodDollar (Mainnet)
+                    </p>
+                    <h3 className="text-2xl font-extrabold mt-3 truncate">{realGdBalance} G$</h3>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      ~ ${(parseFloat(realGdBalance) * 0.00015).toFixed(4)} USD
+                    </p>
+                  </div>
+                  <div className="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
                     <span className="font-bold text-sm text-emerald-400">G$</span>
                   </div>
                 </div>
@@ -531,28 +555,39 @@ export default function WalletPage() {
                   <label className="text-xs text-muted-foreground font-semibold uppercase block mb-1.5">
                     Select Token
                   </label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     <button
                       type="button"
                       onClick={() => setSendToken('CELO')}
-                      className={`py-2.5 rounded-xl border text-sm font-semibold transition-all ${
+                      className={`py-2.5 rounded-xl border text-xs font-semibold transition-all ${
                         sendToken === 'CELO'
                           ? 'border-primary bg-primary/10 text-primary'
                           : 'border-border hover:bg-white/5 text-muted-foreground'
                       }`}
                     >
-                      CELO (Bal: {celoBalance})
+                      CELO ({celoBalance})
                     </button>
                     <button
                       type="button"
-                      onClick={() => setSendToken('G$')}
-                      className={`py-2.5 rounded-xl border text-sm font-semibold transition-all ${
-                        sendToken === 'G$'
+                      onClick={() => setSendToken('G$_REWARDS')}
+                      className={`py-2.5 rounded-xl border text-xs font-semibold transition-all ${
+                        sendToken === 'G$_REWARDS'
                           ? 'border-primary bg-primary/10 text-primary'
                           : 'border-border hover:bg-white/5 text-muted-foreground'
                       }`}
                     >
-                      GoodDollar (Bal: {gdBalance})
+                      G$ Rewards ({gdBalance})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSendToken('G$_MAINNET')}
+                      className={`py-2.5 rounded-xl border text-xs font-semibold transition-all ${
+                        sendToken === 'G$_MAINNET'
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-border hover:bg-white/5 text-muted-foreground'
+                      }`}
+                    >
+                      G$ Mainnet ({realGdBalance})
                     </button>
                   </div>
                 </div>

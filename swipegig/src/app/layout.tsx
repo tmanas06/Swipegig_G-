@@ -10,6 +10,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://swipegig-g.vercel.app'),
   title: {
     default: "SwipeGig — AI-Powered Web3 Job Platform",
     template: "%s | SwipeGig",

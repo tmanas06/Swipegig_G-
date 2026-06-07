@@ -30,6 +30,7 @@ export async function GET(req: Request) {
 
   let celoBalance = '0.0000';
   let gdBalance = '0.00';
+  let realGdBalance = '0.00';
   let success = false;
 
   for (const rpcUrl of FALLBACK_RPCS) {
@@ -39,7 +40,7 @@ export async function GET(req: Request) {
         transport: http(rpcUrl, { timeout: 8000 }),
       });
 
-      const [celoBalanceRaw, gdBalanceRaw] = await Promise.all([
+      const [celoBalanceRaw, gdBalanceRaw, realGdBalanceRaw] = await Promise.all([
         client.getBalance({
           address: address as Address,
         }),
@@ -49,13 +50,23 @@ export async function GET(req: Request) {
           functionName: 'balanceOf',
           args: [address as Address],
         }).catch((err: any) => {
-          console.warn('[BALANCE] G$ token read failed, defaulting to 0:', err.message);
+          console.warn('[BALANCE] G$ dev token read failed, defaulting to 0:', err.message);
+          return BigInt(0);
+        }),
+        client.readContract({
+          address: '0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A' as Address,
+          abi: ERC20_ABI,
+          functionName: 'balanceOf',
+          args: [address as Address],
+        }).catch((err: any) => {
+          console.warn('[BALANCE] G$ real token read failed, defaulting to 0:', err.message);
           return BigInt(0);
         }),
       ]);
 
       celoBalance = parseFloat(formatEther(celoBalanceRaw)).toFixed(4);
       gdBalance = parseFloat(formatEther(gdBalanceRaw)).toFixed(2);
+      realGdBalance = parseFloat(formatEther(realGdBalanceRaw)).toFixed(2);
       success = true;
       break;
     } catch (err) {
@@ -70,6 +81,7 @@ export async function GET(req: Request) {
   return NextResponse.json({
     celoBalance,
     gdBalance,
+    realGdBalance,
     network: 'celo',
     success,
   });
